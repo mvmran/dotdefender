@@ -16,6 +16,13 @@ npm start            # serves the game at http://localhost:5173
 Any static file server works too (`python3 -m http.server`, GitHub Pages, Netlify…).
 Opening `index.html` straight from disk won't work, because browsers block ES modules on `file://`.
 
+### Hosting on GitHub Pages
+
+`.github/workflows/pages.yml` runs the tests and deploys the game on every push to `main`.
+One-time setup: in the repo's **Settings → Pages**, set **Source** to **GitHub Actions**.
+The game is then live at `https://<user>.github.io/dotdefender/`. To redeploy by hand,
+use **Actions → Deploy to GitHub Pages → Run workflow**.
+
 ### Controls
 
 | Action | Mouse / touch | Keyboard |
