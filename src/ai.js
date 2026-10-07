@@ -1,5 +1,5 @@
 import { createRng } from './rng.js';
-import { CONFIG, NEUTRAL } from './game.js';
+import { NEUTRAL } from './game.js';
 
 export const DIFFICULTY = {
   easy: {
@@ -134,7 +134,7 @@ export class AIController {
       if (t.owner === me) continue;
       let nearest = Infinity;
       for (const r of mine) nearest = Math.min(nearest, dist(r, t));
-      const travel = nearest / CONFIG.dotSpeed;
+      const travel = nearest / g.dotSpeed;
 
       let defence = t.troops - incoming[t.id][me];
       if (t.owner !== NEUTRAL) {

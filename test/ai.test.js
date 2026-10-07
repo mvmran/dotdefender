@@ -4,9 +4,9 @@ import { generateMap } from '../src/map.js';
 import { Game } from '../src/game.js';
 import { AIController } from '../src/ai.js';
 
-function play(diffs, seed, maxTime = 900) {
+function play(diffs, seed, maxTime = 900, rules) {
   const map = generateMap({ regionCount: 20, seed });
-  const game = new Game({ map, players: diffs.length, humanId: null, seed });
+  const game = new Game({ map, players: diffs.length, humanId: null, seed, rules });
   const ais = diffs.map((d, i) => new AIController(game, i + 1, d, seed));
   while (game.status === 'playing' && game.time < maxTime) {
     game.step(1 / 60);
@@ -35,5 +35,15 @@ test('AI never sends from regions it does not own', () => {
     game.step(1 / 60);
     for (const ai of ais) ai.update(1 / 60);
     for (const o of game.orders.values()) assert.equal(game.regions[o.source].owner, o.owner);
+  }
+});
+
+test('AI still plays a full game under extreme rules', () => {
+  for (const rules of [
+    { regenSpeed: 5, moveSpeed: 4, populationLimit: 200 },
+    { regenSpeed: 0.25, moveSpeed: 0.25, populationLimit: 10 },
+  ]) {
+    const game = play(['normal', 'normal'], 3, 120, rules);
+    assert.ok(game.territory(1) + game.territory(2) >= 6, JSON.stringify(rules));
   }
 });

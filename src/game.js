@@ -18,6 +18,27 @@ export const CONFIG = {
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
+// Gameplay rules a player can change before a game (the cheat menu).
+// They apply to every player, AIs included. Speeds are multipliers on CONFIG;
+// populationLimit is the troop cap of an average-sized region.
+export const RULES = {
+  regenSpeed: { label: 'Regeneration speed', min: 0.25, max: 5, step: 0.25, default: 1 },
+  moveSpeed: { label: 'Movement speed', min: 0.25, max: 4, step: 0.25, default: 1 },
+  populationLimit: { label: 'Population limit', min: 10, max: 200, step: 5, default: CONFIG.capBase },
+};
+
+// Fills in defaults and clamps each rule to its allowed range.
+export function resolveRules(overrides = {}) {
+  const rules = {};
+  for (const [key, spec] of Object.entries(RULES)) {
+    const v = Number(overrides[key]);
+    rules[key] = Number.isFinite(v) ? clamp(v, spec.min, spec.max) : spec.default;
+  }
+  return rules;
+}
+
+export const isDefaultRules = (rules) => Object.entries(RULES).every(([k, spec]) => rules[k] === spec.default);
+
 // Picks spread-out start regions: the first is the one farthest from the
 // middle of the map, each next one maximises distance to those already taken.
 function pickStarts(regions, count, rng) {
@@ -53,8 +74,11 @@ function pickStarts(regions, count, rng) {
 export class Game {
   // players: number of non-neutral owners (ids 1..players).
   // humanId: owner id controlled by the mouse, or null for AI-only games.
-  constructor({ map, players = 2, humanId = 1, seed = 1 }) {
+  // rules: optional overrides, see RULES.
+  constructor({ map, players = 2, humanId = 1, seed = 1, rules = {} }) {
     this.map = map;
+    this.rules = resolveRules(rules);
+    this.dotSpeed = CONFIG.dotSpeed * this.rules.moveSpeed;
     this.rng = createRng(seed ^ 0x9e3779b9);
     this.playerCount = players + 1; // including neutral
     this.humanId = humanId;
@@ -72,8 +96,8 @@ export class Game {
       return {
         ...r,
         size,
-        cap: Math.round(CONFIG.capBase * size),
-        growth: CONFIG.growthBase * size,
+        cap: Math.max(1, Math.round(this.rules.populationLimit * size)),
+        growth: CONFIG.growthBase * this.rules.regenSpeed * size,
         radius: 10 + 9 * size,
         owner: NEUTRAL,
         troops: Math.round(this.rng.range(...CONFIG.neutralTroops) * size),
@@ -82,7 +106,7 @@ export class Game {
 
     pickStarts(this.regions, players, this.rng).forEach((r, i) => {
       r.owner = i + 1;
-      r.troops = CONFIG.startTroops;
+      r.troops = Math.min(CONFIG.startTroops, r.cap);
       r.capital = true;
     });
   }
@@ -193,7 +217,7 @@ export class Game {
         dist,
         offset,
         traveled: src.radius * 0.6,
-        speed: CONFIG.dotSpeed * this.rng.range(0.95, 1.05),
+        speed: this.dotSpeed * this.rng.range(0.95, 1.05),
         x: src.cx,
         y: src.cy,
         alive: true,

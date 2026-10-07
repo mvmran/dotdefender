@@ -13,6 +13,7 @@
 
     <header id="hud" hidden>
       <div class="hud-brand">Dot&nbsp;Defender</div>
+      <span id="cheat-tag" class="cheat-tag" title="Cheat menu settings are active" hidden>Cheats</span>
       <div id="power" class="power" aria-label="Territory share"></div>
       <div class="hud-controls">
         <div class="ratio" role="group" aria-label="Troops to send">
@@ -60,6 +61,10 @@
         </div>
 
         <button id="play-btn" class="primary">Play</button>
+        <div class="cheat-row">
+          <button id="cheats-btn" class="link-btn">Cheat menu</button>
+          <span id="cheat-badge" class="cheat-tag" hidden>Cheats on</span>
+        </div>
 
         <details class="how">
           <summary>How to play</summary>
@@ -74,6 +79,14 @@
             <li>Bigger regions grow faster and hold more. Take every enemy base to win.</li>
           </ul>
         </details>
+      </section>
+
+      <section id="cheat-card" class="card" hidden>
+        <h2>Cheat menu</h2>
+        <p class="tagline">Bend the rules. They apply to everyone, computer opponents included, from the next game you start.</p>
+        <div id="cheat-fields" class="cheat-fields"></div>
+        <button id="cheat-reset">Reset to defaults</button>
+        <button id="cheat-back" class="primary">Done</button>
       </section>
 
       <section id="pause-card" class="card small" hidden>

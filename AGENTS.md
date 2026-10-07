@@ -69,6 +69,13 @@ Key boundaries:
 - `game.incomingTable()` gives per-region, per-owner troops already committed
   (dots in flight plus unreleased orders). The AI relies on it to avoid
   over-sending.
+- **Rules** (`RULES` / `resolveRules` in `game.js`) are per-game overrides set from
+  the cheat menu: `regenSpeed` and `moveSpeed` multiply `CONFIG.growthBase` and
+  `CONFIG.dotSpeed`, and `populationLimit` replaces `CONFIG.capBase`. They apply
+  to all players. Read `game.dotSpeed`, `region.growth` and `region.cap`, never
+  `CONFIG` directly, so the rules take effect (the AI does this too). To add a
+  rule, add it to `RULES` and to `RULE_TEXT` in `main.js`. The menu builds its
+  sliders from `RULES`.
 - Coordinates are world units. The average cell area is constant (`CELL_AREA` in
   `map.js`), so speeds and sizes feel the same on every map size. The renderer
   fits `map.bounds` to the screen and rotates 90° on portrait screens, so always
@@ -76,7 +83,8 @@ Key boundaries:
 
 ## Balancing
 
-Tunables live in `CONFIG` (`game.js`) and `DIFFICULTY` (`ai.js`). After changing
+Tunables live in `CONFIG` (`game.js`) and `DIFFICULTY` (`ai.js`). Player-facing
+rule ranges live in `RULES` (`game.js`). After changing
 them, run `npm test`. `test/ai.test.js` asserts that hard reliably beats easy
 and that AIs expand early. For a broader check, simulate many seeded AI-vs-AI games
 headlessly with `new Game({ map, players, humanId: null, seed })` and step them in a loop.

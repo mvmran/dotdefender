@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, CONFIG, NEUTRAL } from '../src/game.js';
+import { Game, CONFIG, NEUTRAL, RULES, resolveRules, isDefaultRules } from '../src/game.js';
 
 // Three square regions in a row: 0 | 1 | 2, each 100 wide.
 function lineMap() {
@@ -22,8 +22,8 @@ function lineMap() {
   return { seed: 1, width: 300, height: 100, bounds: { x0: 0, y0: 0, x1: 300, y1: 100 }, regions };
 }
 
-function setup() {
-  const game = new Game({ map: lineMap(), players: 2, humanId: 1, seed: 3 });
+function setup(rules) {
+  const game = new Game({ map: lineMap(), players: 2, humanId: 1, seed: 3, rules });
   const [a, b, c] = game.regions;
   Object.assign(a, { owner: 1, troops: 30, capital: true });
   Object.assign(b, { owner: NEUTRAL, troops: 10, capital: false });
@@ -138,4 +138,62 @@ test('orders stop when the source is captured', () => {
   assert.equal(game.orders.size, 0);
   assert.equal(game.dots.filter((d) => d.owner === 1).length, 0);
   assert.ok(CONFIG.dotSpeed > 0);
+});
+
+test('resolveRules fills defaults and clamps out-of-range values', () => {
+  const r = resolveRules({ regenSpeed: 99, moveSpeed: 'fast', populationLimit: 1 });
+  assert.equal(r.regenSpeed, RULES.regenSpeed.max);
+  assert.equal(r.moveSpeed, RULES.moveSpeed.default);
+  assert.equal(r.populationLimit, RULES.populationLimit.min);
+  assert.ok(isDefaultRules(resolveRules()));
+  assert.ok(!isDefaultRules(r));
+});
+
+test('default rules match the base CONFIG', () => {
+  const game = setup();
+  assert.equal(game.dotSpeed, CONFIG.dotSpeed);
+  assert.equal(game.regions[0].cap, CONFIG.capBase);
+  assert.equal(game.regions[0].growth, CONFIG.growthBase);
+});
+
+test('regeneration speed scales troop growth', () => {
+  const grown = (regenSpeed) => {
+    const game = setup({ regenSpeed });
+    game.regions[0].troops = 0;
+    run(game, 5);
+    return game.regions[0].troops;
+  };
+  const base = grown(1);
+  assert.ok(Math.abs(grown(2) - base * 2) < 0.1, `${grown(2)} vs ${base * 2}`);
+  assert.ok(Math.abs(grown(0.5) - base / 2) < 0.1);
+});
+
+test('movement speed scales how fast dots arrive', () => {
+  const arrival = (moveSpeed) => {
+    const game = setup({ moveSpeed });
+    game.sendCount(1, 0, 1, 1);
+    let t = 0;
+    while (game.regions[1].troops === 10 && t < 10) {
+      game.step(1 / 60);
+      t += 1 / 60;
+    }
+    return t;
+  };
+  const slow = arrival(1);
+  const fast = arrival(2);
+  assert.ok(fast < slow * 0.6, `fast ${fast}s vs normal ${slow}s`);
+});
+
+test('population limit sets the cap bases grow to', () => {
+  const game = setup({ populationLimit: 100 });
+  game.regions[0].troops = 0;
+  run(game, 200);
+  assert.equal(game.regions[0].cap, 100);
+  assert.equal(game.regions[0].troops, 100);
+});
+
+test('start troops never exceed a low population limit', () => {
+  const map = lineMap();
+  const game = new Game({ map, players: 2, humanId: 1, seed: 3, rules: { populationLimit: 10 } });
+  for (const r of game.regions) if (r.owner !== NEUTRAL) assert.ok(r.troops <= r.cap);
 });

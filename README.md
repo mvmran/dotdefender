@@ -45,6 +45,17 @@ use **Actions → Deploy to GitHub Pages → Run workflow**.
 - Opposing dots that meet in the field destroy each other one for one.
 - You lose when you have no regions and no dots left. You win when every opponent is gone.
 
+### Cheat menu
+
+**Cheat menu**, under the Play button, changes the rules for your next game.
+The settings apply to every player, computer opponents included, and are remembered between visits:
+
+- **Regeneration speed** (0.25×–5×): how fast bases grow troops.
+- **Movement speed** (0.25×–4×): how fast dots travel.
+- **Population limit** (10–200, default 45): the most troops an average base grows to.
+
+A yellow **Cheats** tag shows in the top bar while non-default rules are active.
+
 Each game gets a freshly generated continent (Voronoi regions with a random coastline).
 On portrait phone screens the map turns 90° to fill the display.
 
@@ -71,6 +82,7 @@ headlessly in Node. That's how the tests pit AIs against each other.
 ## Tweaking
 
 - Game balance (dot speed, growth, caps, collision radius) lives in `CONFIG` in `src/game.js`.
+  The cheat-menu rules and their ranges are in `RULES` in the same file.
 - AI behaviour per difficulty is in `DIFFICULTY` in `src/ai.js`.
 - Map sizes are in `MAP_SIZES` in `src/map.js`. Colours are in `src/palette.js`.
 - `window.dotdefender.game` in the browser console gives you the live game state.

@@ -150,6 +150,16 @@ button {
   opacity: 0;
 }
 
+.cheat-tag {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f5b82e;
+  color: #3d2a00;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 /* Overlay and cards */
 .overlay {
   position: fixed;
@@ -291,6 +301,63 @@ h2 {
   margin: 0;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.cheat-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: -4px;
+}
+
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 4px;
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link-btn:hover {
+  color: var(--ink);
+}
+
+.cheat-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 4px 0;
+}
+
+.cheat-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  align-items: baseline;
+}
+
+.cheat-field label {
+  font-weight: 600;
+}
+
+.cheat-field output {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--blue);
+}
+
+.cheat-field input {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: var(--blue);
+}
+
+.cheat-field small {
+  grid-column: 1 / -1;
+  color: var(--muted);
 }
 
 @media (max-width: 640px) {

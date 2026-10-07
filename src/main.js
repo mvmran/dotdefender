@@ -1,5 +1,5 @@
 import { generateMap, MAP_SIZES } from './map.js';
-import { Game } from './game.js';
+import { Game, CONFIG, RULES, resolveRules, isDefaultRules } from './game.js';
 import { AIController } from './ai.js';
 import { Renderer } from './render.js';
 import { InputController } from './input.js';
@@ -15,7 +15,7 @@ const canvas = $('#game');
 const hud = $('#hud');
 const hint = $('#hint');
 const overlay = $('#overlay');
-const cards = { menu: $('#menu'), pause: $('#pause-card'), end: $('#end-card') };
+const cards = { menu: $('#menu'), cheats: $('#cheat-card'), pause: $('#pause-card'), end: $('#end-card') };
 
 const settings = loadSettings();
 let ratio = settings.ratio;
@@ -37,9 +37,10 @@ const input = new InputController(canvas, renderer, {
 function loadSettings() {
   const defaults = { difficulty: 'normal', opponents: '1', size: 'medium', ratio: 1 };
   try {
-    return { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
+    const saved = { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
+    return { ...saved, rules: resolveRules(saved.rules) };
   } catch {
-    return defaults;
+    return { ...defaults, rules: resolveRules() };
   }
 }
 
@@ -76,6 +77,59 @@ document.querySelector('.ratio').addEventListener('click', (e) => {
 });
 setRatio(ratio);
 
+// ----- Cheat menu -----
+const RULE_TEXT = {
+  regenSpeed: {
+    format: (v) => `${v}×`,
+    hint: (v) => `Bases grow about ${(CONFIG.growthBase * v).toFixed(2)} troops per second.`,
+  },
+  moveSpeed: {
+    format: (v) => `${v}×`,
+    hint: (v) => `Dots travel ${Math.round(CONFIG.dotSpeed * v)} units per second.`,
+  },
+  populationLimit: {
+    format: (v) => `${v}`,
+    hint: () => 'Most troops an average base grows to. Bigger regions hold a bit more.',
+  },
+};
+
+function buildCheatMenu() {
+  const box = $('#cheat-fields');
+  for (const [key, spec] of Object.entries(RULES)) {
+    const field = document.createElement('div');
+    field.className = 'cheat-field';
+    field.innerHTML = `<label for="rule-${key}">${spec.label}</label><output id="out-${key}"></output>
+      <input type="range" id="rule-${key}" min="${spec.min}" max="${spec.max}" step="${spec.step}" />
+      <small id="hint-${key}"></small>`;
+    field.querySelector('input').addEventListener('input', (e) => {
+      settings.rules = resolveRules({ ...settings.rules, [key]: e.target.value });
+      saveSettings();
+      syncCheats();
+    });
+    box.appendChild(field);
+  }
+}
+
+function syncCheats() {
+  for (const key of Object.keys(RULES)) {
+    const v = settings.rules[key];
+    $(`#rule-${key}`).value = v;
+    $(`#out-${key}`).textContent = RULE_TEXT[key].format(v);
+    $(`#hint-${key}`).textContent = RULE_TEXT[key].hint(v);
+  }
+  $('#cheat-badge').hidden = isDefaultRules(settings.rules);
+}
+
+buildCheatMenu();
+syncCheats();
+$('#cheats-btn').addEventListener('click', () => show('cheats'));
+$('#cheat-back').addEventListener('click', () => show('menu'));
+$('#cheat-reset').addEventListener('click', () => {
+  settings.rules = resolveRules();
+  saveSettings();
+  syncCheats();
+});
+
 function show(name) {
   overlay.hidden = !name;
   for (const [k, el] of Object.entries(cards)) el.hidden = k !== name;
@@ -111,7 +165,8 @@ function start(seed = randomSeed()) {
   lastSeed = seed;
   const opponents = Number(settings.opponents);
   const map = generateMap({ regionCount: MAP_SIZES[settings.size], seed });
-  game = new Game({ map, players: opponents + 1, humanId: HUMAN, seed });
+  game = new Game({ map, players: opponents + 1, humanId: HUMAN, seed, rules: settings.rules });
+  $('#cheat-tag').hidden = isDefaultRules(game.rules);
   ais = [];
   for (let i = 0; i < opponents; i++) ais.push(new AIController(game, HUMAN + 1 + i, settings.difficulty, seed));
   renderer.setGame(game);
