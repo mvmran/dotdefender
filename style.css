@@ -225,6 +225,93 @@ button {
   box-shadow: 0 0 0 1px var(--line);
 }
 
+.perks {
+  display: flex;
+  gap: 6px;
+}
+
+.perk-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 10px 0 7px;
+  border: 0;
+  border-radius: 9px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Charge progress fills the button from the left. */
+.perk-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: calc(var(--charge, 0) * 100%);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.perk-btn > * {
+  position: relative;
+}
+
+.perk-btn {
+  white-space: nowrap;
+}
+
+.perk-time:empty {
+  display: none;
+}
+
+.perk-btn [data-icon] {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.perk-btn.ready {
+  background: #fff;
+  color: var(--ink);
+  animation: perk-glow 1.2s ease-in-out infinite;
+}
+
+.perk-btn.ready[data-perk='laser'] {
+  --glow: rgba(225, 29, 72, 0.7);
+}
+
+.perk-btn.ready[data-perk='regen'] {
+  --glow: rgba(34, 197, 94, 0.7);
+}
+
+.perk-btn.active {
+  background: #22c55e;
+  color: #fff;
+}
+
+.perk-btn.aiming {
+  background: #e11d48;
+  color: #fff;
+  animation: none;
+}
+
+@keyframes perk-glow {
+  50% {
+    box-shadow: 0 0 0 4px var(--glow);
+  }
+}
+
+canvas.aiming {
+  cursor: crosshair;
+}
+
 /* Overlay and cards */
 .overlay {
   position: fixed;
@@ -426,6 +513,24 @@ h2 {
 }
 
 @media (max-width: 640px) {
+  /* Icon and countdown only, so the bar fits on a phone. */
+  .perk-btn {
+    padding: 0 7px 0 5px;
+  }
+  .perk-btn .perk-name {
+    display: none;
+  }
+  .perk-btn.aiming .perk-name {
+    display: inline;
+  }
+  .hud-controls {
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .clock {
+    min-width: 0;
+  }
   #hud {
     top: 8px;
     left: 8px;

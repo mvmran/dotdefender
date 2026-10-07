@@ -26,10 +26,22 @@ export class InputController {
   }
 
   reset() {
+    this.targeting = null;
     this.selection = new Set();
     this.hoverId = null;
     this.pointer = null;
     this.cancelGesture();
+  }
+
+  // Laser aiming: the next click on any region fires at it.
+  startTargeting(onTarget) {
+    this.selection.clear();
+    this.cancelGesture();
+    this.targeting = onTarget;
+  }
+
+  stopTargeting() {
+    this.targeting = null;
   }
 
   cancelGesture() {
@@ -46,6 +58,7 @@ export class InputController {
       hoverId: this.hoverId,
       pointer: this.pointer,
       aiming: this.dragActive || (this.selection.size > 0 && this.mode === null),
+      targeting: Boolean(this.targeting),
     };
   }
 
@@ -78,6 +91,12 @@ export class InputController {
     this.pruneSelection(game);
     this.pointer = w;
     this.hoverId = id;
+    if (this.targeting) {
+      const fire = this.targeting;
+      this.targeting = null;
+      if (e.button === 0 && id != null) fire(id);
+      return; // any other click cancels aiming
+    }
     if (e.button === 2) {
       this.selection.clear();
       return;

@@ -45,6 +45,14 @@ export const SPECIALS = {
   engineering: { name: 'Engineering works', bonus: 0.5, effect: 'movement speed' },
   construction: { name: 'Construction yard', bonus: 0.5, effect: 'population limit' },
 };
+// Super perks: holding every special base of one type unlocks an ability.
+// Recharge times are per game (harder levels pass longer ones).
+export const PERKS = {
+  laser: { special: 'engineering', name: 'Laser' },
+  regen: { special: 'biology', name: 'Super regeneration' },
+};
+export const DEFAULT_PERK_TIMES = { laserRecharge: 45, regenDuration: 10, regenRecharge: 60 };
+
 const SPECIAL_GARRISON = 1.5; // specials start better defended than plain neutrals
 
 export const isDefaultRules = (rules) => Object.entries(RULES).every(([k, spec]) => rules[k] === spec.default);
@@ -86,7 +94,8 @@ export class Game {
   // humanId: owner id controlled by the mouse, or null for AI-only games.
   // rules: optional overrides, see RULES.
   // specialDensity: share of regions that become special bases (see SPECIALS).
-  constructor({ map, players = 2, humanId = 1, seed = 1, rules = {}, specialDensity = 0.18 }) {
+  // perkTimes: recharge and duration seconds for super perks, see DEFAULT_PERK_TIMES.
+  constructor({ map, players = 2, humanId = 1, seed = 1, rules = {}, specialDensity = 0.18, perkTimes = {} }) {
     this.map = map;
     this.rules = resolveRules(rules);
     this.dotSpeed = CONFIG.dotSpeed * this.rules.moveSpeed;
@@ -100,6 +109,10 @@ export class Game {
     this.orders = new Map(); // sourceId -> pending release
     this.events = [];
     this.stats = Array.from({ length: this.playerCount }, () => ({ sent: 0, captured: 0, lost: 0, peak: 0 }));
+    this.perkTimes = { ...DEFAULT_PERK_TIMES, ...perkTimes };
+    // Per owner: when each perk is next usable, and when super regen ends.
+    this.perkState = Array.from({ length: this.playerCount }, () => ({ laserReadyAt: 0, regenReadyAt: 0, regenUntil: -1 }));
+    this.perksHeld = Array.from({ length: this.playerCount }, () => ({ laser: false, regen: false }));
 
     const meanArea = map.regions.reduce((s, r) => s + r.area, 0) / map.regions.length;
     this.regions = map.regions.map((r) => {
@@ -172,7 +185,8 @@ export class Game {
   }
 
   // Recomputes every region's cap and growth from its owner's bonuses.
-  // Called whenever a region changes hands.
+  // Called whenever a region changes hands. Also reports super perks gained
+  // or lost as 'perk' events.
   applyBonuses() {
     const bonuses = Array.from({ length: this.playerCount }, (_, o) => this.bonusFor(o));
     for (const r of this.regions) {
@@ -180,6 +194,99 @@ export class Game {
       r.cap = Math.max(1, Math.round(r.baseCap * b.construction));
       r.growth = r.baseGrowth * b.biology;
     }
+    for (let o = 1; o < this.playerCount; o++) {
+      for (const perk of Object.keys(PERKS)) {
+        const held = this.hasPerk(o, perk);
+        if (held !== this.perksHeld[o][perk]) {
+          this.perksHeld[o][perk] = held;
+          // A newly unlocked perk charges once before first use. Otherwise
+          // grabbing the special bases early (Hard maps have one of each) can
+          // win the game within seconds.
+          if (held) {
+            const st = this.perkState[o];
+            if (perk === 'laser') st.laserReadyAt = Math.max(st.laserReadyAt, this.time + this.perkTimes.laserRecharge);
+            else st.regenReadyAt = Math.max(st.regenReadyAt, this.time + this.perkTimes.regenRecharge);
+          }
+          this.events.push({ type: 'perk', owner: o, perk, gained: held, time: this.time });
+        }
+      }
+    }
+  }
+
+  // A perk is unlocked while an owner holds every special base of its type.
+  hasPerk(owner, perk) {
+    if (owner === NEUTRAL) return false;
+    const type = PERKS[perk].special;
+    let total = 0;
+    for (const r of this.regions) {
+      if (r.special !== type) continue;
+      if (r.owner !== owner) return false;
+      total++;
+    }
+    return total > 0;
+  }
+
+  // { unlocked, ready, charge: seconds until ready, active: regen seconds left }
+  perkStatus(owner, perk) {
+    const st = this.perkState[owner];
+    const unlocked = this.hasPerk(owner, perk);
+    const readyAt = perk === 'laser' ? st.laserReadyAt : st.regenReadyAt;
+    const active = perk === 'regen' ? Math.max(0, st.regenUntil - this.time) : 0;
+    const charge = Math.max(0, readyAt - this.time);
+    return { unlocked, ready: unlocked && charge === 0 && active === 0, charge, active };
+  }
+
+  regenActive(owner) {
+    return owner !== NEUTRAL && this.perkState[owner].regenUntil > this.time;
+  }
+
+  // The beam comes from the shooter's engineering base nearest the target.
+  laserSource(owner, targetId) {
+    const target = this.regions[targetId];
+    let source = null;
+    let best = Infinity;
+    for (const r of this.regions) {
+      if (r.special !== 'engineering' || r.owner !== owner) continue;
+      const d = Math.hypot(r.cx - target.cx, r.cy - target.cy);
+      if (d < best) {
+        best = d;
+        source = r;
+      }
+    }
+    return source;
+  }
+
+  // Wipes out a base: its troops and any dots inside the region are destroyed
+  // and it turns neutral. Works on any region, the shooter's own included.
+  fireLaser(owner, targetId) {
+    const target = this.regions[targetId];
+    if (!target || this.status !== 'playing' || !this.perkStatus(owner, 'laser').ready) return false;
+    const source = this.laserSource(owner, targetId);
+    const from = target.owner;
+    for (const d of this.dots) {
+      if (d.alive && pointInPolygon(d.x, d.y, target.poly)) d.alive = false;
+    }
+    this.dots = this.dots.filter((d) => d.alive);
+    this.orders.delete(target.id);
+    target.owner = NEUTRAL;
+    target.troops = 0;
+    if (from !== NEUTRAL && from !== owner) this.stats[from].lost += 1;
+    this.perkState[owner].laserReadyAt = this.time + this.perkTimes.laserRecharge;
+    this.events.push({ type: 'laser', owner, source: source.id, region: target.id, from, time: this.time });
+    this.applyBonuses();
+    this.checkStatus();
+    return true;
+  }
+
+  // Starts super regeneration: bases this owner captures while it lasts start
+  // at full capacity. Recharging starts once it ends.
+  activateRegen(owner) {
+    if (this.status !== 'playing' || !this.perkStatus(owner, 'regen').ready) return false;
+    const st = this.perkState[owner];
+    st.regenUntil = this.time + this.perkTimes.regenDuration;
+    st.regenReadyAt = st.regenUntil + this.perkTimes.regenRecharge;
+    this.events.push({ type: 'regen', owner, time: this.time });
+    return true;
   }
 
   regionAt(x, y) {
@@ -335,7 +442,9 @@ export class Game {
       this.stats[d.owner].captured += 1;
       if (from !== NEUTRAL) this.stats[from].lost += 1;
       this.applyBonuses(); // the region now uses its new owner's bonuses
-      this.events.push({ type: 'capture', region: target.id, from, to: d.owner, special: target.special, time: this.time });
+      const regen = this.regenActive(d.owner);
+      if (regen) target.troops = Math.max(target.troops, target.cap);
+      this.events.push({ type: 'capture', region: target.id, from, to: d.owner, special: target.special, regen, time: this.time });
     }
   }
 

@@ -149,3 +149,48 @@ test('normal AI usually beats easy AI', () => {
   for (let seed = 1; seed <= 6; seed++) if (play(['easy', 'normal'], seed).winner === 2) normalWins++;
   assert.ok(normalWins >= 5, `normal won ${normalWins}/6`);
 });
+
+// Hands every base of `type` to player 1 at the start of a 2-player game.
+function giveSet(type, seed = 3) {
+  const map = generateMap({ regionCount: 26, seed });
+  const game = new Game({ map, players: 2, humanId: null, seed, specialDensity: 0.3, perkTimes: { laserRecharge: 10, regenRecharge: 10 } });
+  for (const r of game.regions) if (r.special === type) Object.assign(r, { owner: 1, troops: 20 });
+  // A well-stocked enemy base, so there's something worth shooting.
+  for (const r of game.regions) if (r.owner === 2) r.troops = 60;
+  game.applyBonuses();
+  return game;
+}
+
+test('AI fires its laser at an enemy once it is charged', () => {
+  for (const level of ['easy', 'normal', 'hard']) {
+    const game = giveSet('engineering');
+    const ais = [new AIController(game, 1, level, 3), new AIController(game, 2, 'normal', 3)];
+    let shot = null;
+    while (!shot && game.time < 40 && game.status === 'playing') {
+      game.step(1 / 60);
+      ais.forEach((a) => a.update(1 / 60));
+      shot = game.events.find((e) => e.type === 'laser');
+      if (!shot) game.events.length = 0;
+    }
+    assert.ok(shot, `${level} AI never fired`);
+    assert.ok(shot.time >= 10, 'not before the first charge');
+    assert.equal(shot.owner, 1);
+    assert.equal(shot.from, 2, `${level} AI should shoot the enemy`);
+  }
+});
+
+test('AI uses super regeneration while it is attacking', () => {
+  const game = giveSet('biology');
+  const ais = [new AIController(game, 1, 'normal', 3), new AIController(game, 2, 'normal', 3)];
+  let used = null;
+  while (!used && game.time < 60 && game.status === 'playing') {
+    game.step(1 / 60);
+    ais.forEach((a) => a.update(1 / 60));
+    used = game.events.find((e) => e.type === 'regen' && e.owner === 1);
+    if (!used) game.events.length = 0;
+  }
+  assert.ok(used, 'never activated');
+  const incoming = game.incomingTable();
+  const attacking = game.regions.filter((r) => r.owner !== 1).reduce((n, r) => n + incoming[r.id][1], 0);
+  assert.ok(attacking > 0, 'activated with no attack under way');
+});

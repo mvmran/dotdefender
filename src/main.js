@@ -1,6 +1,6 @@
 import { generateMap, MAP_SIZES } from './map.js';
-import { Game, CONFIG, RULES, SPECIALS, resolveRules, isDefaultRules } from './game.js';
-import { AIController, DIFFICULTY } from './ai.js';
+import { Game, CONFIG, RULES, SPECIALS, PERKS, resolveRules, isDefaultRules } from './game.js';
+import { AIController, DIFFICULTY, perkTimesFor } from './ai.js';
 import { iconSvg } from './icons.js';
 import { Renderer } from './render.js';
 import { InputController } from './input.js';
@@ -163,7 +163,10 @@ function setPaused(p) {
   if (!game || game.status !== 'playing') return;
   paused = p;
   input.enabled = !p;
-  if (p) input.cancelGesture();
+  if (p) {
+    input.cancelGesture();
+    input.stopTargeting();
+  }
   show(p ? 'pause' : null);
 }
 
@@ -173,7 +176,9 @@ function start(seed = randomSeed()) {
   const opponents = Number(settings.opponents);
   const map = generateMap({ regionCount: MAP_SIZES[settings.size], seed });
   const specialDensity = DIFFICULTY[settings.difficulty].specialDensity;
-  game = new Game({ map, players: opponents + 1, humanId: HUMAN, seed, rules: settings.rules, specialDensity });
+  const perkTimes = perkTimesFor(settings.difficulty);
+  game = new Game({ map, players: opponents + 1, humanId: HUMAN, seed, rules: settings.rules, specialDensity, perkTimes });
+  perkWasReady = { laser: false, regen: false };
   lastBonusKey = '';
   $('#toast').hidden = true;
   $('#cheat-tag').hidden = isDefaultRules(game.rules);
@@ -248,8 +253,81 @@ function announceSpecials() {
   }
 }
 
+// ----- Super perks -----
+let perkWasReady = { laser: false, regen: false };
+
+function usePerk(perk) {
+  if (!game || game.humanId !== HUMAN || paused || game.status !== 'playing') return;
+  if (perk === 'regen') {
+    game.activateRegen(HUMAN);
+  } else if (input.targeting) {
+    input.stopTargeting(); // pressing again cancels aiming
+  } else if (game.perkStatus(HUMAN, 'laser').ready) {
+    input.startTargeting((id) => game.fireLaser(HUMAN, id));
+  }
+}
+
+document.querySelectorAll('.perk-btn').forEach((b) => b.addEventListener('click', () => usePerk(b.dataset.perk)));
+
+function updatePerks() {
+  const times = game.perkTimes;
+  for (const perk of Object.keys(PERKS)) {
+    const st = game.perkStatus(HUMAN, perk);
+    const btn = $(`#${perk}-btn`);
+    btn.hidden = !st.unlocked;
+    if (!st.unlocked) continue;
+    const aiming = perk === 'laser' && Boolean(input.targeting);
+    const total = perk === 'laser' ? times.laserRecharge : times.regenRecharge;
+    btn.classList.toggle('ready', st.ready && !aiming);
+    btn.classList.toggle('active', st.active > 0);
+    btn.classList.toggle('aiming', aiming);
+    btn.style.setProperty('--charge', st.ready || st.active ? 0 : String(1 - st.charge / total));
+    let name = perk === 'laser' ? 'Laser' : 'Regen';
+    let time = '';
+    if (aiming) name = 'Pick a base';
+    else if (st.active > 0) time = `${Math.ceil(st.active)}s`;
+    else if (!st.ready) time = `${Math.ceil(st.charge)}s`;
+    btn.querySelector('.perk-name').textContent = name;
+    btn.querySelector('.perk-time').textContent = time;
+    if (st.ready && !perkWasReady[perk]) {
+      const key = perk === 'laser' ? 'L' : 'R';
+      toast(`${iconSvg(perk, 18)}<span><b>${PERKS[perk].name} ready!</b> Tap the button or press ${key}.</span>`);
+    }
+    perkWasReady[perk] = st.ready;
+  }
+  canvas.classList.toggle('aiming', Boolean(input.targeting));
+}
+
+function announcePerks() {
+  for (const e of game.events) {
+    if (e.type === 'perk') {
+      const name = PERKS[e.perk].name;
+      if (e.owner === HUMAN) {
+        toast(
+          e.gained
+            ? `${iconSvg(e.perk, 18)}<span><b>${name} unlocked!</b> Charging up…</span>`
+            : `${iconSvg(e.perk, 18)}<span><b>${name} lost.</b> You no longer hold every ${SPECIALS[PERKS[e.perk].special].name.toLowerCase()}.</span>`,
+        );
+      } else if (e.gained) {
+        toast(`${iconSvg(e.perk, 18)}<span><b>${PALETTE[e.owner].name} unlocked the ${name.toLowerCase()}!</b></span>`);
+      }
+    } else if (e.type === 'laser' && e.owner !== HUMAN && e.from === HUMAN) {
+      toast(`${iconSvg('laser', 18)}<span><b>${PALETTE[e.owner].name} lasered one of your bases!</b></span>`);
+    } else if (e.type === 'regen' && e.owner !== HUMAN) {
+      toast(`${iconSvg('regen', 18)}<span><b>${PALETTE[e.owner].name} activated super regeneration!</b></span>`);
+    }
+  }
+}
+
+let hudHeight = 0;
 function updateHud() {
+  updatePerks();
   updateBonuses();
+  // Perk buttons and bonus chips can make the HUD wrap taller on phones.
+  if (hud.offsetHeight !== hudHeight) {
+    hudHeight = hud.offsetHeight;
+    layout();
+  }
   const total = game.regions.length;
   const segs = $('#power').children;
   for (let id = 1; id < game.playerCount; id++) {
@@ -285,14 +363,19 @@ function showEnd() {
 window.addEventListener('keydown', (e) => {
   // Keys only apply to a human game that is running or paused.
   const active = game && game.humanId === HUMAN && (overlay.hidden || !cards.pause.hidden);
-  if (!active) return;
+  if (!active || e.ctrlKey || e.metaKey || e.altKey) return; // leave browser shortcuts alone
   const k = e.key.toLowerCase();
   if (k === ' ' || k === 'p') {
     e.preventDefault();
     if (game.status === 'playing') setPaused(!paused);
   } else if (k === 'escape') {
-    if (input.selection.size) input.selection.clear();
+    if (input.targeting) input.stopTargeting();
+    else if (input.selection.size) input.selection.clear();
     else setPaused(!paused);
+  } else if (!paused && k === 'l') {
+    usePerk('laser');
+  } else if (!paused && k === 'r') {
+    usePerk('regen');
   } else if (!paused && ['1', '2', '3', '4'].includes(k)) {
     setRatio(Number(k) * 0.25);
   } else if (!paused && k === 'a') {
@@ -308,6 +391,7 @@ document.addEventListener('visibilitychange', () => {
 function layout() {
   const h = hud.hidden ? 0 : hud.getBoundingClientRect().bottom;
   renderer.insets.top = Math.max(16, h + 4);
+  $('#toast').style.top = `${Math.max(16, h + 10)}px`; // just below the HUD, which wraps on phones
   renderer.resize();
 }
 window.addEventListener('resize', layout);
@@ -330,7 +414,10 @@ function frame(now) {
       }
       if (steps >= 8) acc = 0;
     }
-    if (game.humanId === HUMAN) announceSpecials();
+    if (game.humanId === HUMAN) {
+      announceSpecials();
+      announcePerks();
+    }
     renderer.render(input.ui, animTime);
     if (game.humanId === HUMAN) updateHud();
     if (game.status === 'over' && !endShown) showEnd();
@@ -343,7 +430,7 @@ function frame(now) {
 function startAttract() {
   const seed = randomSeed();
   const map = generateMap({ regionCount: MAP_SIZES.medium, seed });
-  game = new Game({ map, players: 3, humanId: null, seed, specialDensity: DIFFICULTY.normal.specialDensity });
+  game = new Game({ map, players: 3, humanId: null, seed, specialDensity: DIFFICULTY.normal.specialDensity, perkTimes: perkTimesFor('normal') });
   ais = [1, 2, 3].map((id) => new AIController(game, id, 'normal', seed));
   renderer.setGame(game);
   paused = false;

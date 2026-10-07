@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, CONFIG, NEUTRAL, RULES, SPECIALS, resolveRules, isDefaultRules } from '../src/game.js';
+import { Game, CONFIG, NEUTRAL, RULES, SPECIALS, PERKS, resolveRules, isDefaultRules } from '../src/game.js';
+import { DIFFICULTY, perkTimesFor } from '../src/ai.js';
 import { generateMap, MAP_SIZES } from '../src/map.js';
 
 // Three square regions in a row: 0 | 1 | 2, each 100 wide.
@@ -316,4 +317,161 @@ test('every team starts with identical stats', () => {
     assert.equal(first.growth, CONFIG.growthBase * CONFIG.capitalSize);
     assert.equal(first.cap, Math.round(CONFIG.capBase * CONFIG.capitalSize));
   }
+});
+
+// ----- Super perks -----
+// Player 1 holds regions 0 and 1; region 1 is the only base of `type`.
+// Player 2 holds region 2.
+function perkSetup(type, perkTimes) {
+  const game = new Game({ map: lineMap(), players: 2, humanId: 1, seed: 3, specialDensity: 0, perkTimes });
+  Object.assign(game.regions[0], { owner: 1, troops: 30, capital: true });
+  Object.assign(game.regions[1], { owner: 1, troops: 10, special: type });
+  Object.assign(game.regions[2], { owner: 2, troops: 25, capital: true });
+  game.applyBonuses();
+  return game;
+}
+const wait = (game, seconds) => run(game, seconds);
+
+test('a perk needs every base of its type, and none on the map means none', () => {
+  const game = perkSetup('engineering');
+  assert.ok(game.hasPerk(1, 'laser'));
+  assert.ok(!game.hasPerk(2, 'laser'));
+  assert.ok(!game.hasPerk(1, 'regen'));
+  // A second engineering base held by someone else breaks the set.
+  game.regions[2].special = 'engineering';
+  game.applyBonuses();
+  assert.ok(!game.hasPerk(1, 'laser'));
+  assert.ok(!setup().hasPerk(1, 'laser'), 'no specials at all');
+  assert.equal(PERKS.laser.special, 'engineering');
+  assert.equal(PERKS.regen.special, 'biology');
+});
+
+test('unlocking and losing perks is reported as events', () => {
+  const game = perkSetup('engineering');
+  assert.ok(game.events.some((e) => e.type === 'perk' && e.owner === 1 && e.perk === 'laser' && e.gained));
+  game.events.length = 0;
+  game.regions[1].owner = 2;
+  game.applyBonuses();
+  assert.ok(game.events.some((e) => e.type === 'perk' && e.owner === 1 && e.perk === 'laser' && !e.gained));
+  assert.ok(game.events.some((e) => e.type === 'perk' && e.owner === 2 && e.perk === 'laser' && e.gained));
+});
+
+test('a newly unlocked laser charges once before it can fire', () => {
+  const game = perkSetup('engineering', { laserRecharge: 20 });
+  assert.ok(!game.perkStatus(1, 'laser').ready);
+  assert.ok(Math.abs(game.perkStatus(1, 'laser').charge - 20) < 1e-9);
+  assert.equal(game.fireLaser(1, 2), false);
+  wait(game, 20.1);
+  assert.ok(game.perkStatus(1, 'laser').ready);
+});
+
+test('the laser wipes out a base and everything in it, then recharges', () => {
+  const game = perkSetup('engineering', { laserRecharge: 20 });
+  wait(game, 20.1);
+  // Enemy dots already sitting in the target region die with it.
+  game.sendCount(2, 2, 0, 20);
+  wait(game, 0.15);
+  const inside = game.dots.filter((d) => d.owner === 2).length;
+  assert.ok(inside > 0);
+  assert.ok(game.fireLaser(1, 2));
+  const t = game.regions[2];
+  assert.equal(t.owner, NEUTRAL);
+  assert.equal(t.troops, 0);
+  assert.equal(game.orders.size, 0, 'pending order from the target is cancelled');
+  assert.equal(game.dots.filter((d) => d.owner === 2).length, 0);
+  const e = game.events.find((ev) => ev.type === 'laser');
+  assert.deepEqual([e.owner, e.source, e.region, e.from], [1, 1, 2, 2]);
+  assert.equal(game.status, 'over', 'that was the enemy’s last base');
+  assert.equal(game.winner, 1);
+});
+
+test('the laser can hit your own base and has to recharge between shots', () => {
+  const game = perkSetup('engineering', { laserRecharge: 20 });
+  game.regions[2].troops = 5;
+  Object.assign(game.regions[2], { owner: 2 });
+  wait(game, 20.1);
+  assert.ok(game.fireLaser(1, 0), 'own base');
+  assert.equal(game.regions[0].owner, NEUTRAL);
+  assert.equal(game.fireLaser(1, 2), false, 'still recharging');
+  assert.ok(Math.abs(game.perkStatus(1, 'laser').charge - 20) < 1e-6);
+  wait(game, 20.1);
+  assert.ok(game.fireLaser(1, 2));
+});
+
+test('lasering your own engineering base loses the laser', () => {
+  const game = perkSetup('engineering', { laserRecharge: 5 });
+  wait(game, 5.1);
+  assert.ok(game.fireLaser(1, 1));
+  assert.ok(!game.hasPerk(1, 'laser'));
+  assert.ok(!game.perkStatus(1, 'laser').unlocked);
+});
+
+test('only a team with the laser can fire it', () => {
+  const game = perkSetup('engineering', { laserRecharge: 5 });
+  wait(game, 5.1);
+  assert.equal(game.fireLaser(2, 0), false);
+  assert.equal(game.regions[0].owner, 1);
+});
+
+test('newly unlocked super regeneration charges once before first use', () => {
+  const game = perkSetup('biology', { regenDuration: 10, regenRecharge: 30 });
+  assert.ok(game.perkStatus(1, 'regen').unlocked);
+  assert.ok(!game.perkStatus(1, 'regen').ready);
+  assert.equal(game.activateRegen(1), false);
+  wait(game, 30.1);
+  assert.ok(game.activateRegen(1));
+});
+
+test('super regeneration fills newly captured bases to capacity while active', () => {
+  const game = perkSetup('biology', { regenDuration: 10, regenRecharge: 30 });
+  wait(game, 30.1);
+  assert.ok(game.activateRegen(1));
+  assert.ok(game.regenActive(1));
+  game.regions[2].troops = 25; // it grew while the perk charged
+  game.regions[0].troops = 40;
+  game.sendCount(1, 0, 2, 40); // 40 vs 25
+  wait(game, 4);
+  const t = game.regions[2];
+  assert.equal(t.owner, 1);
+  assert.ok(t.troops >= t.cap, `troops ${t.troops} vs cap ${t.cap}`);
+  assert.ok(game.events.some((e) => e.type === 'capture' && e.region === 2 && e.regen));
+});
+
+test('super regeneration ends, then recharges before it can be used again', () => {
+  const game = perkSetup('biology', { regenDuration: 10, regenRecharge: 30 });
+  wait(game, 30.1);
+  assert.ok(game.activateRegen(1));
+  assert.equal(game.activateRegen(1), false, 'already active');
+  wait(game, 10.1);
+  assert.ok(!game.regenActive(1));
+  const st = game.perkStatus(1, 'regen');
+  assert.ok(!st.ready && Math.abs(st.charge - 30 + 0.1) < 0.05, `charge ${st.charge}`);
+  wait(game, 30);
+  assert.ok(game.activateRegen(1));
+});
+
+test('captures after super regeneration ends are ordinary', () => {
+  const game = perkSetup('biology', { regenDuration: 2, regenRecharge: 30 });
+  wait(game, 30.1);
+  assert.ok(game.activateRegen(1));
+  wait(game, 2.1);
+  game.regions[2].troops = 25; // it grew while the perk charged
+  game.regions[0].troops = 40;
+  game.sendCount(1, 0, 2, 40);
+  wait(game, 4);
+  assert.equal(game.regions[2].owner, 1);
+  assert.ok(game.regions[2].troops < game.regions[2].cap / 2, `troops ${game.regions[2].troops}`);
+});
+
+test('super regeneration needs every biology base', () => {
+  const game = perkSetup('engineering');
+  assert.equal(game.activateRegen(1), false);
+});
+
+test('perks recharge slower on harder levels', () => {
+  const [e, n, h] = ['easy', 'normal', 'hard'].map(perkTimesFor);
+  assert.ok(e.laserRecharge < n.laserRecharge && n.laserRecharge < h.laserRecharge);
+  assert.ok(e.regenRecharge < n.regenRecharge && n.regenRecharge < h.regenRecharge);
+  assert.equal(e.regenDuration, h.regenDuration);
+  assert.equal(DIFFICULTY.easy.laserRecharge, e.laserRecharge);
 });

@@ -34,6 +34,8 @@ use **Actions → Deploy to GitHub Pages → Run workflow**.
 | Clear selection | Right-click, or click the sea | **Esc** |
 | Troops to send | 25 / 50 / 75 / 100% buttons in the top bar | **1–4** |
 | Pause | Pause button | **Space** / **P** |
+| Fire the laser | Laser button, then click a base | **L**, then click (**Esc** cancels) |
+| Super regeneration | Regen button | **R** |
 
 ### Rules
 
@@ -70,6 +72,25 @@ for as long as you hold it. Bonuses stack (two biology labs give +100%), and the
 Special bases start with 50% more defenders than ordinary neutral ones, and the
 computer goes after them too. Easier levels have more of them: on a medium map,
 Easy has 9, Normal 6 and Hard 3.
+
+### Super perks
+
+Hold **every** special base of one type to unlock a super perk. A perk charges up
+once after you unlock it, then has to recharge after each use. You lose it if
+any base of that type slips out of your hands. The computer uses perks too.
+
+| Perk | Unlocked by | Key | Effect |
+| --- | --- | --- | --- |
+| Laser | every engineering works | **L** | Pick any base (even your own). Its troops, and any dots inside the region, are destroyed and it turns neutral. |
+| Super regeneration | every biology lab | **R** | For 10 seconds, every base you capture starts at full capacity. |
+
+| | Easy | Normal | Hard |
+| --- | --- | --- | --- |
+| Laser recharge | 30 s | 45 s | 60 s |
+| Super regeneration recharge | 40 s | 60 s | 80 s |
+
+The perk buttons appear in the top bar once unlocked and show the time left to
+charge. Press **Esc**, or click outside the map, to cancel aiming the laser.
 
 ### Cheat menu
 

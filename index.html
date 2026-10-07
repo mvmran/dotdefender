@@ -17,6 +17,14 @@
       <div id="bonuses" class="bonuses" aria-label="Your special base bonuses"></div>
       <div id="power" class="power" aria-label="Territory share"></div>
       <div class="hud-controls">
+        <div class="perks">
+          <button id="laser-btn" class="perk-btn" data-perk="laser" title="Laser: wipe out any base (L)" hidden>
+            <span data-icon="laser"></span><span class="perk-name">Laser</span><span class="perk-time"></span>
+          </button>
+          <button id="regen-btn" class="perk-btn" data-perk="regen" title="Super regeneration: bases you capture start full (R)" hidden>
+            <span data-icon="regen"></span><span class="perk-name">Regen</span><span class="perk-time"></span>
+          </button>
+        </div>
         <div class="ratio" role="group" aria-label="Troops to send">
           <button data-ratio="0.25">25%</button>
           <button data-ratio="0.5">50%</button>
@@ -86,6 +94,14 @@
               <span class="legend"><span data-icon="engineering"></span><b>Engineering works</b> <span data-bonus="engineering"></span></span>
               <span class="legend"><span data-icon="construction"></span><b>Construction yard</b> <span data-bonus="construction"></span></span>
               They're better defended, and easier levels have more of them.
+            </li>
+            <li>
+              <b>Super perks.</b> Hold <b>every</b> base of one type to unlock a power. It charges up first, then
+              recharges after each use (faster on Easy):
+              <span class="legend"><span data-icon="laser"></span><b>Laser</b> (all engineering works, key <b>L</b>):
+                pick any base to wipe out. Its troops are destroyed and it turns neutral.</span>
+              <span class="legend"><span data-icon="regen"></span><b>Super regeneration</b> (all biology labs, key
+                <b>R</b>): for 10 seconds, every base you capture starts at full capacity.</span>
             </li>
           </ul>
         </details>

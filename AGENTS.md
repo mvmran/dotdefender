@@ -90,6 +90,18 @@ Key boundaries:
   is spawned. How many specials a map gets is `specialDensity` (a Game option),
   set per difficulty in `DIFFICULTY`. Easier levels get more. Capture events
   carry `special`, which `main.js` uses for its toast messages.
+- **Super perks** (`PERKS` in `game.js`): holding *every* special base of a type
+  unlocks a perk (`hasPerk`): `laser` (engineering) and `regen` (biology). State
+  per owner lives in `game.perkState` (`laserReadyAt`, `regenReadyAt`,
+  `regenUntil`, all in `game.time`). Read it through `perkStatus(owner, perk)`.
+  A newly unlocked perk charges once before first use, so an early grab can't win
+  instantly (Hard maps have one base of each type). `fireLaser(owner, regionId)`
+  makes any region neutral with 0 troops, kills dots inside it, and starts the
+  recharge. `activateRegen(owner)` makes captures fill to `cap` for
+  `regenDuration`. Timings come from the `perkTimes` Game option, set per
+  difficulty in `DIFFICULTY` (use `perkTimesFor(level)`). `applyBonuses()` emits
+  `perk` events on gain or loss. There are also `laser` and `regen` events, and
+  capture events carry `regen`. The AI uses perks in `AIController.usePerks`.
 - Coordinates are world units. The average cell area is constant (`CELL_AREA` in
   `map.js`), so speeds and sizes feel the same on every map size. The renderer
   fits `map.bounds` to the screen and rotates 90° on portrait screens, so always

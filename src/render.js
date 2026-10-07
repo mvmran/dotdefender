@@ -2,6 +2,8 @@ import { PALETTE, mix } from './palette.js';
 import { ICONS, ICON_COLORS } from './icons.js';
 
 const CAPTURE_FADE = 0.45;
+const REGEN = '#22c55e';
+const LASER = '#e11d48';
 const TAU = Math.PI * 2;
 
 export class Renderer {
@@ -11,12 +13,14 @@ export class Renderer {
     this.view = { scale: 1, rotated: false, a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
     this.insets = { top: 64, right: 16, bottom: 40, left: 16 };
     this.effects = [];
+    this.overlays = []; // effects drawn above the bases (laser beams)
     this.game = null;
   }
 
   setGame(game) {
     this.game = game;
     this.effects = [];
+    this.overlays = [];
     this.icons = Object.fromEntries(Object.entries(ICONS).map(([k, d]) => [k, new Path2D(d)]));
     this.paths = game.regions.map((r) => {
       const p = new Path2D();
@@ -78,8 +82,19 @@ export class Renderer {
       if (e.type === 'capture') {
         const r = g.regions[e.region];
         this.effects.push({ type: 'ring', x: r.cx, y: r.cy, r: r.radius, color: PALETTE[e.to].base, t0: now, life: 0.7 });
+        if (e.regen) this.effects.push({ type: 'ring', x: r.cx, y: r.cy, r: r.radius * 1.4, color: REGEN, t0: now, life: 1 });
       } else if (e.type === 'clash') {
         this.effects.push({ type: 'spark', x: e.x, y: e.y, t0: now, life: 0.3 });
+      } else if (e.type === 'laser') {
+        const src = g.regions[e.source];
+        const dst = g.regions[e.region];
+        const color = PALETTE[e.owner].base;
+        this.overlays.push({ type: 'beam', x0: src.cx, y0: src.cy, x1: dst.cx, y1: dst.cy, color, t0: now, life: 0.9 });
+        this.overlays.push({ type: 'blast', x: dst.cx, y: dst.cy, r: dst.radius, t0: now, life: 0.8 });
+      } else if (e.type === 'regen') {
+        for (const r of g.regions) {
+          if (r.owner === e.owner) this.effects.push({ type: 'ring', x: r.cx, y: r.cy, r: r.radius, color: REGEN, t0: now, life: 0.8 });
+        }
       }
     }
     g.events.length = 0;
@@ -161,6 +176,28 @@ export class Renderer {
       ctx.fill(this.paths[ui.hoverId]);
     }
 
+    // Laser aiming: the hovered region glows red, with a dashed preview beam.
+    if (ui.targeting && ui.hoverId != null && g.humanId != null) {
+      const tgt = g.regions[ui.hoverId];
+      ctx.fillStyle = 'rgba(225,29,72,0.28)';
+      ctx.fill(this.paths[tgt.id]);
+      ctx.save();
+      ctx.setLineDash([8 * px, 6 * px]);
+      ctx.lineDashOffset = -now * 40 * px;
+      ctx.strokeStyle = LASER;
+      ctx.lineWidth = 3 * px;
+      ctx.stroke(this.paths[tgt.id]);
+      const src = g.laserSource(g.humanId, tgt.id);
+      if (src && src.id !== tgt.id) {
+        ctx.beginPath();
+        ctx.moveTo(src.cx, src.cy);
+        ctx.lineTo(tgt.cx, tgt.cy);
+        ctx.lineWidth = 2 * px;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     // Aim lines from each selected base.
     if (ui.selection.size && ui.pointer && ui.aiming) {
       const tgt = ui.hoverId != null ? g.regions[ui.hoverId] : null;
@@ -214,8 +251,19 @@ export class Renderer {
     // Bases with troop counts and a ring showing how full they are.
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    const regenOwners = new Set();
+    for (let o = 1; o < g.playerCount; o++) if (g.regenActive(o)) regenOwners.add(o);
     for (const r of g.regions) {
       const pal = PALETTE[r.owner];
+      if (regenOwners.has(r.owner)) {
+        // Pulsing green halo while super regeneration is active.
+        const pulse = 0.5 + 0.5 * Math.sin(now * 8);
+        ctx.beginPath();
+        ctx.arc(r.cx, r.cy, r.radius + (8 + 3 * pulse) * px, 0, TAU);
+        ctx.strokeStyle = `rgba(34,197,94,${0.45 + 0.4 * pulse})`;
+        ctx.lineWidth = 3 * px;
+        ctx.stroke();
+      }
       ctx.beginPath();
       ctx.arc(r.cx, r.cy, r.radius, 0, TAU);
       ctx.fillStyle = pal.base;
@@ -253,6 +301,54 @@ export class Renderer {
       } else {
         ctx.fillText(label, r.cx, r.cy + fontPx * 0.04);
       }
+    }
+
+    // Crosshair over the base being aimed at.
+    if (ui.targeting && ui.hoverId != null) {
+      const r = g.regions[ui.hoverId];
+      const rr = r.radius + 10 * px;
+      ctx.beginPath();
+      ctx.arc(r.cx, r.cy, rr, 0, TAU);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        ctx.moveTo(r.cx + dx * (rr - 5 * px), r.cy + dy * (rr - 5 * px));
+        ctx.lineTo(r.cx + dx * (rr + 7 * px), r.cy + dy * (rr + 7 * px));
+      }
+      ctx.strokeStyle = LASER;
+      ctx.lineWidth = 2.5 * px;
+      ctx.stroke();
+    }
+
+    // Laser beams and blasts, drawn above everything else.
+    this.overlays = this.overlays.filter((e) => now - e.t0 < e.life);
+    for (const e of this.overlays) {
+      const t = (now - e.t0) / e.life;
+      ctx.save();
+      if (e.type === 'beam') {
+        ctx.globalAlpha = 1 - t * t;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(e.x0, e.y0);
+        ctx.lineTo(e.x1, e.y1);
+        ctx.strokeStyle = e.color;
+        ctx.lineWidth = 12 * px * (1 - t * 0.5);
+        ctx.shadowColor = e.color;
+        ctx.shadowBlur = 18 * this.dpr;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3.5 * px;
+        ctx.stroke();
+      } else {
+        ctx.globalAlpha = 1 - t;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r * (0.8 + t * 2.4), 0, TAU);
+        ctx.fillStyle = t < 0.25 ? '#ffffff' : '#ffb347';
+        ctx.fill();
+        ctx.lineWidth = 4 * px;
+        ctx.strokeStyle = LASER;
+        ctx.stroke();
+      }
+      ctx.restore();
     }
   }
 

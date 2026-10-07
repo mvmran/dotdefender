@@ -22,12 +22,19 @@ export const ICONS = {
   engineering: gearPath(),
   // House
   construction: 'M12 2.5 1.5 11.2l1.6 1.9L4.5 12V21.5h6v-6h3v6h6V12l1.4 1.1 1.6-1.9z',
+  // Crosshair (laser perk)
+  laser:
+    'M11 1h2v3.1A8 8 0 0 1 19.9 11H23v2h-3.1A8 8 0 0 1 13 19.9V23h-2v-3.1A8 8 0 0 1 4.1 13H1v-2h3.1A8 8 0 0 1 11 4.1z M12 6a6 6 0 1 0 0 12 6 6 0 1 0 0-12z M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 1 0 0-5z',
+  // Lightning bolt (super regeneration perk)
+  regen: 'M13.5 1 4 13.5h6.2L9 23l10-13h-6.3z',
 };
 
 export const ICON_COLORS = {
   biology: '#169a4f',
   engineering: '#7c3aed',
   construction: '#b45309',
+  laser: '#e11d48',
+  regen: '#16a34a',
 };
 
 export function iconSvg(type, size = 16) {
