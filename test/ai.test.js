@@ -67,11 +67,12 @@ test('AI goes after special bases', () => {
 });
 
 // Counts an AI's decisions and how many were random, over `seconds` of play.
-function watch(difficulty, seconds, seed = 2) {
+// opponent: difficulty for player 2, or null for one that never moves.
+function watch(difficulty, seconds, seed = 2, opponent = 'normal') {
   const map = generateMap({ regionCount: 20, seed });
   const game = new Game({ map, players: 2, humanId: null, seed });
   const ai = new AIController(game, 1, difficulty, seed);
-  const other = new AIController(game, 2, 'normal', seed);
+  const other = opponent ? new AIController(game, 2, opponent, seed) : null;
   const log = { thinks: [], random: 0, firstOrder: null };
   const think = ai.think.bind(ai);
   const randomMove = ai.randomMove.bind(ai);
@@ -86,7 +87,7 @@ function watch(difficulty, seconds, seed = 2) {
   while (game.time < seconds && game.status === 'playing') {
     game.step(1 / 60);
     ai.update(1 / 60);
-    other.update(1 / 60);
+    other?.update(1 / 60);
     if (log.firstOrder === null && [...game.orders.values()].some((o) => o.owner === 1)) log.firstOrder = game.time;
   }
   return log;
@@ -110,8 +111,16 @@ test('easy AI decides less often', () => {
 });
 
 test('a share of easy AI moves are random; harder levels never are', () => {
-  const easy = watch('easy', 300);
-  const share = easy.random / easy.thinks.length;
+  // Pool several games against a passive opponent for a fair sample.
+  let thinks = 0;
+  let random = 0;
+  for (let seed = 1; seed <= 6; seed++) {
+    const log = watch('easy', 400, seed, null);
+    thinks += log.thinks.length;
+    random += log.random;
+  }
+  assert.ok(thinks >= 80, `only ${thinks} decisions`);
+  const share = random / thinks;
   assert.ok(share > 0.25 && share < 0.55, `random share ${share}`);
   assert.equal(watch('normal', 120).random, 0);
   assert.equal(watch('hard', 120).random, 0);

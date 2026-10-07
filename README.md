@@ -38,7 +38,8 @@ use **Actions → Deploy to GitHub Pages → Run workflow**.
 ### Rules
 
 - Owned bases grow troops over time up to a cap (the ring around the base shows how full it is).
-  Bigger regions grow faster and hold more. Neutral grey regions don't grow.
+  Bigger regions grow faster and hold more. Every team's starting base (marked with a star)
+  is identical, so nobody starts ahead. Neutral grey regions don't grow.
 - Each dot that reaches an enemy or neutral base removes one defender. When the
   defenders drop below zero, the region is yours, and the leftover dots become its garrison.
 - Dots sent to your own region add to its troops.

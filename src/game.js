@@ -13,6 +13,7 @@ export const CONFIG = {
   capBase: 45, // max troops an average-sized region grows to
   overflowDecay: 0.6, // troops per second lost while above cap
   startTroops: 20,
+  capitalSize: 1, // every starting base gets the stats of an average region
   neutralTroops: [4, 12],
 };
 
@@ -102,27 +103,31 @@ export class Game {
 
     const meanArea = map.regions.reduce((s, r) => s + r.area, 0) / map.regions.length;
     this.regions = map.regions.map((r) => {
-      const size = clamp(Math.sqrt(r.area / meanArea), 0.75, 1.35);
-      return {
-        ...r,
-        size,
-        baseCap: Math.max(1, Math.round(this.rules.populationLimit * size)),
-        baseGrowth: CONFIG.growthBase * this.rules.regenSpeed * size,
-        special: null,
-        radius: 10 + 9 * size,
-        owner: NEUTRAL,
-        troops: Math.round(this.rng.range(...CONFIG.neutralTroops) * size),
-      };
+      const region = { ...r, special: null, owner: NEUTRAL };
+      this.setSize(region, clamp(Math.sqrt(r.area / meanArea), 0.75, 1.35));
+      region.troops = Math.round(this.rng.range(...CONFIG.neutralTroops) * region.size);
+      return region;
     });
 
+    // Starting bases all get identical stats so no team begins ahead just
+    // because its home region happens to be bigger on the map.
     const starts = pickStarts(this.regions, players, this.rng);
     starts.forEach((r, i) => {
       r.owner = i + 1;
       r.capital = true;
+      this.setSize(r, CONFIG.capitalSize);
     });
     this.placeSpecials(specialDensity);
     this.applyBonuses();
     for (const r of starts) r.troops = Math.min(CONFIG.startTroops, r.cap);
+  }
+
+  // Size drives a region's growth, troop cap and base radius.
+  setSize(r, size) {
+    r.size = size;
+    r.baseCap = Math.max(1, Math.round(this.rules.populationLimit * size));
+    r.baseGrowth = CONFIG.growthBase * this.rules.regenSpeed * size;
+    r.radius = 10 + 9 * size;
   }
 
   // Turns a few neutral regions into special bases, spread across the map

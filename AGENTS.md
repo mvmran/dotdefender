@@ -59,8 +59,11 @@ Key boundaries:
   `humanId` is `null` for AI-only games (the menu backdrop and the tests).
   `PALETTE` has 5 entries, which caps games at 4 players.
 - A region has `poly`, centre `cx/cy`, `neighbors`, `size` (area factor 0.75–1.35)
-  and derived `cap`, `growth` and `radius`, plus live `owner` and `troops` (a float;
+  and derived `cap`, `growth` and `radius` (set together by `game.setSize`), plus live `owner` and `troops` (a float;
   display with `Math.floor`).
+- **Fair starts:** every starting base (`region.capital`) gets `CONFIG.capitalSize`
+  rather than its own area, so all teams begin with identical troops, growth, cap
+  and radius. `test/game.test.js` enforces this.
 - Sending creates an *order* (`game.orders`, keyed by source id) that releases dots
   in waves. A new order from the same source replaces the old one. Orders cancel
   when the source changes owner.

@@ -298,3 +298,22 @@ test('specials are neutral, spread out, never next to a start, and scale with de
   const none = new Game({ map, players: 2, humanId: 1, seed: 1, specialDensity: 0 });
   assert.equal(none.regions.filter((r) => r.special).length, 0);
 });
+
+test('every team starts with identical stats', () => {
+  for (let seed = 1; seed <= 60; seed++) {
+    const map = generateMap({ regionCount: MAP_SIZES.medium, seed });
+    const game = new Game({ map, players: 4, humanId: 1, seed });
+    const starts = game.regions.filter((r) => r.capital);
+    assert.deepEqual(starts.map((r) => r.owner).sort(), [1, 2, 3, 4]);
+    const [first, ...rest] = starts;
+    for (const r of rest) {
+      for (const key of ['troops', 'growth', 'cap', 'radius', 'size']) {
+        assert.equal(r[key], first[key], `seed ${seed}: ${key} differs (${r[key]} vs ${first[key]})`);
+      }
+      assert.equal(r.special, null);
+    }
+    for (let o = 1; o <= 4; o++) assert.deepEqual(game.bonusFor(o), game.bonusFor(1));
+    assert.equal(first.growth, CONFIG.growthBase * CONFIG.capitalSize);
+    assert.equal(first.cap, Math.round(CONFIG.capBase * CONFIG.capitalSize));
+  }
+});
