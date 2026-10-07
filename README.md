@@ -45,6 +45,16 @@ use **Actions → Deploy to GitHub Pages → Run workflow**.
 - Opposing dots that meet in the field destroy each other one for one.
 - You lose when you have no regions and no dots left. You win when every opponent is gone.
 
+### Difficulty
+
+- **Easy:** the computer waits 8 seconds before its first move, then thinks only
+  about every 4.5 seconds. About 40% of its moves are random: a random base sends a
+  random share of its troops to a random region, with no planning. It also defends
+  less and misjudges targets more. Maps have the most special bases.
+- **Normal:** a steady opponent that plans every move.
+- **Hard:** quick, accurate, defends everything, can make two moves at once, and
+  prioritises special bases and you.
+
 ### Special bases
 
 Some neutral bases carry a badge. Capture one and **all** of your bases get a bonus

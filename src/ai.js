@@ -3,8 +3,9 @@ import { NEUTRAL } from './game.js';
 
 export const DIFFICULTY = {
   easy: {
-    interval: 2.8, // seconds between decisions
-    startDelay: 3,
+    interval: 4.5, // seconds between decisions
+    startDelay: 8, // seconds before the first move
+    randomMove: 0.4, // chance a decision is a random move instead of a planned one
     margin: 0.35, // extra troops sent on top of the estimated defence (fraction)
     flat: 4, // extra troops sent on top of the estimated defence (absolute)
     noise: 0.5, // randomness in target choice
@@ -19,6 +20,7 @@ export const DIFFICULTY = {
   normal: {
     interval: 1.6,
     startDelay: 1.5,
+    randomMove: 0,
     margin: 0.2,
     flat: 3,
     noise: 0.2,
@@ -33,6 +35,7 @@ export const DIFFICULTY = {
   hard: {
     interval: 0.9,
     startDelay: 0.8,
+    randomMove: 0,
     margin: 0.1,
     flat: 2,
     noise: 0.06,
@@ -70,6 +73,11 @@ export class AIController {
     const me = this.owner;
     const mine = g.regions.filter((r) => r.owner === me);
     if (!mine.length) return;
+    // Only roll when the level has random moves, so other levels play as before.
+    if (this.p.randomMove > 0 && this.rng.next() < this.p.randomMove) {
+      this.randomMove(mine);
+      return;
+    }
 
     const incoming = g.incomingTable();
     // net: troops a region will have once everything in flight lands.
@@ -109,6 +117,18 @@ export class AIController {
     }
 
     if (actions > 0) this.consolidate(mine, avail);
+  }
+
+  // An unplanned move: a random base sends a random share of its troops to a
+  // random region, ignoring threats, odds and distance.
+  randomMove(mine) {
+    const g = this.game;
+    const sources = mine.filter((r) => r.troops >= 2 && !g.orders.has(r.id));
+    if (!sources.length) return false;
+    const src = this.rng.pick(sources);
+    const targets = g.regions.filter((r) => r.id !== src.id);
+    const target = this.rng.pick(targets);
+    return g.sendCount(this.owner, src.id, target.id, Math.max(1, Math.floor(src.troops * this.rng.range(0.3, 1))));
   }
 
   // Picks nearby sources until `need` troops are covered. Returns null when

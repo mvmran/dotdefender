@@ -96,8 +96,10 @@ Key boundaries:
 
 Tunables live in `CONFIG` (`game.js`) and `DIFFICULTY` (`ai.js`). Player-facing
 rule ranges live in `RULES` (`game.js`). After changing
-them, run `npm test`. `test/ai.test.js` asserts that hard reliably beats easy
-and that AIs expand early. For a broader check, simulate many seeded AI-vs-AI games
+them, run `npm test`. `test/ai.test.js` asserts that hard reliably beats easy,
+normal usually beats easy, AIs expand early, and that easy keeps its handicaps
+(`startDelay`, `interval` and `randomMove`, the share of decisions that are
+random moves; only easy has it above 0). For a broader check, simulate many seeded AI-vs-AI games
 headlessly with `new Game({ map, players, humanId: null, seed })` and step them in a loop.
 
 ## Testing changes
