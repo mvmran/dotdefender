@@ -160,6 +160,71 @@ button {
   white-space: nowrap;
 }
 
+.bonuses {
+  display: flex;
+  gap: 6px;
+}
+
+.bonuses:empty {
+  display: none;
+}
+
+.bonus {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 7px 3px 4px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.toast {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 32px);
+  padding: 9px 16px 9px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  font-size: 14px;
+  pointer-events: none;
+  transition: opacity 0.5s;
+}
+
+.toast.out {
+  opacity: 0;
+}
+
+.toast svg {
+  flex: none;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.legend [data-icon] {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
 /* Overlay and cards */
 .overlay {
   position: fixed;

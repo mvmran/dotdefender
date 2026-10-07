@@ -14,6 +14,7 @@
     <header id="hud" hidden>
       <div class="hud-brand">Dot&nbsp;Defender</div>
       <span id="cheat-tag" class="cheat-tag" title="Cheat menu settings are active" hidden>Cheats</span>
+      <div id="bonuses" class="bonuses" aria-label="Your special base bonuses"></div>
       <div id="power" class="power" aria-label="Territory share"></div>
       <div class="hud-controls">
         <div class="ratio" role="group" aria-label="Troops to send">
@@ -28,6 +29,7 @@
         </button>
       </div>
     </header>
+    <div id="toast" class="toast" role="status" hidden></div>
     <div id="hint" class="hint" hidden>Drag from your <b>blue</b> base to a region to attack &middot; sweep over more bases to combine them</div>
 
     <div id="overlay" class="overlay">
@@ -77,6 +79,13 @@
             <li>Enemy dots that meet yours in the field destroy each other one for one.</li>
             <li>Send to your own region to reinforce it. Keys <b>1–4</b> choose 25/50/75/100% of troops.</li>
             <li>Bigger regions grow faster and hold more. Take every enemy base to win.</li>
+            <li>
+              Some neutral bases carry a badge. Hold one and <b>all</b> your bases get a bonus, which stacks:
+              <span class="legend"><span data-icon="biology"></span><b>Biology lab</b> +25% regeneration</span>
+              <span class="legend"><span data-icon="engineering"></span><b>Engineering works</b> +25% movement speed</span>
+              <span class="legend"><span data-icon="construction"></span><b>Construction yard</b> +25% population limit</span>
+              They're better defended, and easier levels have more of them.
+            </li>
           </ul>
         </details>
       </section>

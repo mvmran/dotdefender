@@ -36,6 +36,7 @@ src/geometry.js  Voronoi via half-plane clipping, polygon helpers
 src/render.js    canvas drawing, effects, world<->screen transform
 src/input.js     pointer (mouse/touch) gestures -> send commands
 src/palette.js   colours per owner id
+src/icons.js     special-base icons as SVG path strings (canvas Path2D + inline SVG)
 src/rng.js       seeded PRNG (mulberry32)
 ```
 
@@ -72,10 +73,20 @@ Key boundaries:
 - **Rules** (`RULES` / `resolveRules` in `game.js`) are per-game overrides set from
   the cheat menu: `regenSpeed` and `moveSpeed` multiply `CONFIG.growthBase` and
   `CONFIG.dotSpeed`, and `populationLimit` replaces `CONFIG.capBase`. They apply
-  to all players. Read `game.dotSpeed`, `region.growth` and `region.cap`, never
-  `CONFIG` directly, so the rules take effect (the AI does this too). To add a
+  to all players. Read `game.speedFor(owner)`, `region.growth` and `region.cap`, never
+  `CONFIG` directly, so the rules and special-base bonuses take effect (the AI
+  does this too). To add a
   rule, add it to `RULES` and to `RULE_TEXT` in `main.js`. The menu builds its
   sliders from `RULES`.
+- **Special bases** (`SPECIALS` in `game.js`): some neutral regions get
+  `region.special` = `biology` | `engineering` | `construction`. Holding one gives
+  the owner +25% regeneration, dot speed or population limit on all their bases,
+  stacking per base held. Regions keep `baseCap` / `baseGrowth`, and
+  `applyBonuses()` recomputes `cap` / `growth` from the owner's bonuses after
+  every capture. Dot speed per owner is `game.speedFor(owner)`, fixed when a dot
+  is spawned. How many specials a map gets is `specialDensity` (a Game option),
+  set per difficulty in `DIFFICULTY`. Easier levels get more. Capture events
+  carry `special`, which `main.js` uses for its toast messages.
 - Coordinates are world units. The average cell area is constant (`CELL_AREA` in
   `map.js`), so speeds and sizes feel the same on every map size. The renderer
   fits `map.bounds` to the screen and rotates 90° on portrait screens, so always

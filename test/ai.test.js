@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateMap } from '../src/map.js';
 import { Game } from '../src/game.js';
-import { AIController } from '../src/ai.js';
+import { AIController, DIFFICULTY } from '../src/ai.js';
 
 function play(diffs, seed, maxTime = 900, rules) {
   const map = generateMap({ regionCount: 20, seed });
-  const game = new Game({ map, players: diffs.length, humanId: null, seed, rules });
+  const game = new Game({ map, players: diffs.length, humanId: null, seed, rules, specialDensity: DIFFICULTY.normal.specialDensity });
   const ais = diffs.map((d, i) => new AIController(game, i + 1, d, seed));
   while (game.status === 'playing' && game.time < maxTime) {
     game.step(1 / 60);
@@ -16,9 +16,15 @@ function play(diffs, seed, maxTime = 900, rules) {
 }
 
 test('AI expands into neutral territory early on', () => {
-  const game = play(['normal', 'normal'], 5, 30);
-  assert.ok(game.territory(1) >= 3, `p1 ${game.territory(1)}`);
-  assert.ok(game.territory(2) >= 3, `p2 ${game.territory(2)}`);
+  // Averaged over several maps so one awkward layout doesn't decide it.
+  const seeds = [1, 2, 3, 4, 5, 6];
+  const totals = [0, 0];
+  for (const seed of seeds) {
+    const game = play(['normal', 'normal'], seed, 30);
+    totals[0] += game.territory(1);
+    totals[1] += game.territory(2);
+  }
+  for (const t of totals) assert.ok(t / seeds.length >= 3.5, `average ${t / seeds.length} regions`);
 });
 
 test('hard AI reliably beats easy AI', () => {
@@ -46,4 +52,16 @@ test('AI still plays a full game under extreme rules', () => {
     const game = play(['normal', 'normal'], 3, 120, rules);
     assert.ok(game.territory(1) + game.territory(2) >= 6, JSON.stringify(rules));
   }
+});
+
+test('AI goes after special bases', () => {
+  let taken = 0;
+  let total = 0;
+  for (let seed = 1; seed <= 5; seed++) {
+    const game = play(['normal', 'normal'], seed, 90);
+    const specials = game.regions.filter((r) => r.special);
+    total += specials.length;
+    taken += specials.filter((r) => r.owner !== 0).length;
+  }
+  assert.ok(taken / total >= 0.6, `took ${taken}/${total} specials in 90s`);
 });

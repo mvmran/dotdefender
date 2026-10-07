@@ -37,6 +37,15 @@ export function resolveRules(overrides = {}) {
   return rules;
 }
 
+// Special neutral bases. Whoever holds one gets a bonus for all their bases;
+// each extra base of the same type adds the bonus again.
+export const SPECIALS = {
+  biology: { name: 'Biology lab', bonus: 0.25, effect: 'regeneration speed' },
+  engineering: { name: 'Engineering works', bonus: 0.25, effect: 'movement speed' },
+  construction: { name: 'Construction yard', bonus: 0.25, effect: 'population limit' },
+};
+const SPECIAL_GARRISON = 1.5; // specials start better defended than plain neutrals
+
 export const isDefaultRules = (rules) => Object.entries(RULES).every(([k, spec]) => rules[k] === spec.default);
 
 // Picks spread-out start regions: the first is the one farthest from the
@@ -75,7 +84,8 @@ export class Game {
   // players: number of non-neutral owners (ids 1..players).
   // humanId: owner id controlled by the mouse, or null for AI-only games.
   // rules: optional overrides, see RULES.
-  constructor({ map, players = 2, humanId = 1, seed = 1, rules = {} }) {
+  // specialDensity: share of regions that become special bases (see SPECIALS).
+  constructor({ map, players = 2, humanId = 1, seed = 1, rules = {}, specialDensity = 0.18 }) {
     this.map = map;
     this.rules = resolveRules(rules);
     this.dotSpeed = CONFIG.dotSpeed * this.rules.moveSpeed;
@@ -96,19 +106,75 @@ export class Game {
       return {
         ...r,
         size,
-        cap: Math.max(1, Math.round(this.rules.populationLimit * size)),
-        growth: CONFIG.growthBase * this.rules.regenSpeed * size,
+        baseCap: Math.max(1, Math.round(this.rules.populationLimit * size)),
+        baseGrowth: CONFIG.growthBase * this.rules.regenSpeed * size,
+        special: null,
         radius: 10 + 9 * size,
         owner: NEUTRAL,
         troops: Math.round(this.rng.range(...CONFIG.neutralTroops) * size),
       };
     });
 
-    pickStarts(this.regions, players, this.rng).forEach((r, i) => {
+    const starts = pickStarts(this.regions, players, this.rng);
+    starts.forEach((r, i) => {
       r.owner = i + 1;
-      r.troops = Math.min(CONFIG.startTroops, r.cap);
       r.capital = true;
     });
+    this.placeSpecials(specialDensity);
+    this.applyBonuses();
+    for (const r of starts) r.troops = Math.min(CONFIG.startTroops, r.cap);
+  }
+
+  // Turns a few neutral regions into special bases, spread across the map
+  // and never right next to a starting region.
+  placeSpecials(density) {
+    const types = Object.keys(SPECIALS);
+    const perType = density > 0 ? Math.max(1, Math.round((this.regions.length * density) / types.length)) : 0;
+    const nearStart = (r) => r.neighbors.some((n) => this.regions[n].capital);
+    const pool = this.regions.filter((r) => r.owner === NEUTRAL && !nearStart(r));
+    const chosen = [];
+    const d2 = (a, b) => (a.cx - b.cx) ** 2 + (a.cy - b.cy) ** 2;
+    for (let i = 0; i < perType * types.length && pool.length; i++) {
+      // Best of a few random candidates: the one farthest from other specials.
+      let best = null;
+      let bestD = -1;
+      for (let k = 0; k < 6; k++) {
+        const c = pool[this.rng.int(0, pool.length - 1)];
+        const d = chosen.length ? Math.min(...chosen.map((o) => d2(c, o))) : 0;
+        if (d > bestD) {
+          bestD = d;
+          best = c;
+        }
+      }
+      best.special = types[i % types.length];
+      best.troops = Math.round(best.troops * SPECIAL_GARRISON);
+      chosen.push(best);
+      pool.splice(pool.indexOf(best), 1);
+    }
+  }
+
+  // Multipliers an owner gets from the special bases they hold.
+  bonusFor(owner) {
+    const b = { biology: 1, engineering: 1, construction: 1 };
+    if (owner === NEUTRAL) return b;
+    for (const r of this.regions) if (r.owner === owner && r.special) b[r.special] += SPECIALS[r.special].bonus;
+    return b;
+  }
+
+  // Effective dot speed for an owner, including engineering bonuses.
+  speedFor(owner) {
+    return this.dotSpeed * this.bonusFor(owner).engineering;
+  }
+
+  // Recomputes every region's cap and growth from its owner's bonuses.
+  // Called whenever a region changes hands.
+  applyBonuses() {
+    const bonuses = Array.from({ length: this.playerCount }, (_, o) => this.bonusFor(o));
+    for (const r of this.regions) {
+      const b = bonuses[r.owner];
+      r.cap = Math.max(1, Math.round(r.baseCap * b.construction));
+      r.growth = r.baseGrowth * b.biology;
+    }
   }
 
   regionAt(x, y) {
@@ -200,6 +266,7 @@ export class Game {
   }
 
   spawnWave(src, dst, owner, n) {
+    const speed = this.speedFor(owner);
     const dx = dst.cx - src.cx;
     const dy = dst.cy - src.cy;
     const dist = Math.hypot(dx, dy) || 1;
@@ -217,7 +284,7 @@ export class Game {
         dist,
         offset,
         traveled: src.radius * 0.6,
-        speed: this.dotSpeed * this.rng.range(0.95, 1.05),
+        speed: speed * this.rng.range(0.95, 1.05),
         x: src.cx,
         y: src.cy,
         alive: true,
@@ -262,7 +329,8 @@ export class Game {
       this.orders.delete(target.id);
       this.stats[d.owner].captured += 1;
       if (from !== NEUTRAL) this.stats[from].lost += 1;
-      this.events.push({ type: 'capture', region: target.id, from, to: d.owner, time: this.time });
+      this.applyBonuses(); // the region now uses its new owner's bonuses
+      this.events.push({ type: 'capture', region: target.id, from, to: d.owner, special: target.special, time: this.time });
     }
   }
 

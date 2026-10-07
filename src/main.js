@@ -1,6 +1,7 @@
 import { generateMap, MAP_SIZES } from './map.js';
-import { Game, CONFIG, RULES, resolveRules, isDefaultRules } from './game.js';
-import { AIController } from './ai.js';
+import { Game, CONFIG, RULES, SPECIALS, resolveRules, isDefaultRules } from './game.js';
+import { AIController, DIFFICULTY } from './ai.js';
+import { iconSvg } from './icons.js';
 import { Renderer } from './render.js';
 import { InputController } from './input.js';
 import { PALETTE } from './palette.js';
@@ -122,6 +123,7 @@ function syncCheats() {
 
 buildCheatMenu();
 syncCheats();
+document.querySelectorAll('[data-icon]').forEach((el) => (el.innerHTML = iconSvg(el.dataset.icon, 16)));
 $('#cheats-btn').addEventListener('click', () => show('cheats'));
 $('#cheat-back').addEventListener('click', () => show('menu'));
 $('#cheat-reset').addEventListener('click', () => {
@@ -165,7 +167,10 @@ function start(seed = randomSeed()) {
   lastSeed = seed;
   const opponents = Number(settings.opponents);
   const map = generateMap({ regionCount: MAP_SIZES[settings.size], seed });
-  game = new Game({ map, players: opponents + 1, humanId: HUMAN, seed, rules: settings.rules });
+  const specialDensity = DIFFICULTY[settings.difficulty].specialDensity;
+  game = new Game({ map, players: opponents + 1, humanId: HUMAN, seed, rules: settings.rules, specialDensity });
+  lastBonusKey = '';
+  $('#toast').hidden = true;
   $('#cheat-tag').hidden = isDefaultRules(game.rules);
   ais = [];
   for (let i = 0; i < opponents; i++) ais.push(new AIController(game, HUMAN + 1 + i, settings.difficulty, seed));
@@ -197,7 +202,49 @@ function buildPowerBar() {
   bar.appendChild(neutral);
 }
 
+// Chips in the top bar for the bonuses the human currently holds.
+let lastBonusKey = '';
+function updateBonuses() {
+  const bonus = game.bonusFor(HUMAN);
+  const key = Object.keys(SPECIALS).map((t) => bonus[t]).join();
+  if (key === lastBonusKey) return;
+  lastBonusKey = key;
+  $('#bonuses').innerHTML = Object.entries(SPECIALS)
+    .filter(([t]) => bonus[t] > 1)
+    .map(([t, spec]) => {
+      const pct = Math.round((bonus[t] - 1) * 100);
+      return `<span class="bonus" title="${spec.name}: +${pct}% ${spec.effect}">${iconSvg(t, 14)}+${pct}%</span>`;
+    })
+    .join('');
+}
+
+let toastTimer = null;
+function toast(html) {
+  const el = $('#toast');
+  el.innerHTML = html;
+  el.hidden = false;
+  el.classList.remove('out');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('out'), 2600);
+}
+
+// Tells the human when they win or lose a special base. Runs before the
+// renderer consumes this frame's events.
+function announceSpecials() {
+  for (const e of game.events) {
+    if (e.type !== 'capture' || !e.special || (e.to !== HUMAN && e.from !== HUMAN)) continue;
+    const spec = SPECIALS[e.special];
+    const pct = Math.round(spec.bonus * 100);
+    const text =
+      e.to === HUMAN
+        ? `<b>${spec.name} captured!</b> +${pct}% ${spec.effect}`
+        : `<b>${spec.name} lost</b> to ${PALETTE[e.to].name}: −${pct}% ${spec.effect}`;
+    toast(`${iconSvg(e.special, 18)}<span>${text}</span>`);
+  }
+}
+
 function updateHud() {
+  updateBonuses();
   const total = game.regions.length;
   const segs = $('#power').children;
   for (let id = 1; id < game.playerCount; id++) {
@@ -278,6 +325,7 @@ function frame(now) {
       }
       if (steps >= 8) acc = 0;
     }
+    if (game.humanId === HUMAN) announceSpecials();
     renderer.render(input.ui, animTime);
     if (game.humanId === HUMAN) updateHud();
     if (game.status === 'over' && !endShown) showEnd();
@@ -290,7 +338,7 @@ function frame(now) {
 function startAttract() {
   const seed = randomSeed();
   const map = generateMap({ regionCount: MAP_SIZES.medium, seed });
-  game = new Game({ map, players: 3, humanId: null, seed });
+  game = new Game({ map, players: 3, humanId: null, seed, specialDensity: DIFFICULTY.normal.specialDensity });
   ais = [1, 2, 3].map((id) => new AIController(game, id, 'normal', seed));
   renderer.setGame(game);
   paused = false;

@@ -1,4 +1,5 @@
 import { PALETTE, mix } from './palette.js';
+import { ICONS, ICON_COLORS } from './icons.js';
 
 const CAPTURE_FADE = 0.45;
 const TAU = Math.PI * 2;
@@ -16,6 +17,7 @@ export class Renderer {
   setGame(game) {
     this.game = game;
     this.effects = [];
+    this.icons = Object.fromEntries(Object.entries(ICONS).map(([k, d]) => [k, new Path2D(d)]));
     this.paths = game.regions.map((r) => {
       const p = new Path2D();
       r.poly.forEach((v, i) => (i ? p.lineTo(v.x, v.y) : p.moveTo(v.x, v.y)));
@@ -233,6 +235,10 @@ export class Renderer {
       // "Up" on screen, in world space, so the star sits above the base.
       const off = r.radius + 9 * px;
       if (r.capital) this.star(r.cx + (rotated ? -off : 0), r.cy + (rotated ? 0 : -off), 5 * px, pal.base);
+      if (r.special) {
+        const boff = r.radius + 12 * px;
+        this.badge(r.special, r.cx + (rotated ? -boff : 0), r.cy + (rotated ? 0 : -boff), 10 * px, rotated);
+      }
 
       const label = String(Math.floor(r.troops));
       const fontPx = Math.max(10 * px, r.radius * (label.length > 2 ? 0.8 : 0.95));
@@ -277,6 +283,27 @@ export class Renderer {
     ctx.closePath();
     ctx.fillStyle = 'rgba(255,255,255,0.95)';
     ctx.fill();
+  }
+
+  // White disc with the special base's icon, kept upright on rotated screens.
+  badge(type, x, y, r, rotated) {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.lineWidth = r * 0.2;
+    ctx.strokeStyle = ICON_COLORS[type];
+    ctx.stroke();
+    ctx.save();
+    ctx.translate(x, y);
+    if (rotated) ctx.rotate(-Math.PI / 2);
+    const k = (r * 1.3) / 24;
+    ctx.scale(k, k);
+    ctx.translate(-12, -12);
+    ctx.fillStyle = ICON_COLORS[type];
+    ctx.fill(this.icons[type], 'evenodd');
+    ctx.restore();
   }
 
   star(x, y, r, color) {

@@ -45,6 +45,21 @@ use **Actions → Deploy to GitHub Pages → Run workflow**.
 - Opposing dots that meet in the field destroy each other one for one.
 - You lose when you have no regions and no dots left. You win when every opponent is gone.
 
+### Special bases
+
+Some neutral bases carry a badge. Capture one and **all** of your bases get a bonus
+for as long as you hold it. Bonuses stack, and they switch to whoever takes the base:
+
+| Badge | Base | Bonus |
+| --- | --- | --- |
+| Flask | Biology lab | +25% regeneration speed |
+| Gear | Engineering works | +25% movement speed |
+| House | Construction yard | +25% population limit |
+
+Special bases start with 50% more defenders than ordinary neutral ones, and the
+computer goes after them too. Easier levels have more of them: on a medium map,
+Easy has 9, Normal 6 and Hard 3.
+
 ### Cheat menu
 
 **Cheat menu**, under the Play button, changes the rules for your next game.
@@ -71,6 +86,7 @@ src/geometry.js         Voronoi diagram and polygon helpers
 src/render.js           canvas rendering and effects
 src/input.js            mouse / touch controls
 src/palette.js          player colours
+src/icons.js            special-base icons (shared by canvas and HTML)
 src/rng.js              seeded random numbers
 tools/serve.js          zero-dependency dev server
 test/                   node:test unit tests
@@ -82,7 +98,9 @@ headlessly in Node. That's how the tests pit AIs against each other.
 ## Tweaking
 
 - Game balance (dot speed, growth, caps, collision radius) lives in `CONFIG` in `src/game.js`.
-  The cheat-menu rules and their ranges are in `RULES` in the same file.
+  The cheat-menu rules and their ranges are in `RULES` in the same file, and the
+  special-base bonuses are in `SPECIALS`.
+- How many special bases each difficulty gets is `specialDensity` in `DIFFICULTY` (`src/ai.js`).
 - AI behaviour per difficulty is in `DIFFICULTY` in `src/ai.js`.
 - Map sizes are in `MAP_SIZES` in `src/map.js`. Colours are in `src/palette.js`.
 - `window.dotdefender.game` in the browser console gives you the live game state.

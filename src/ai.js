@@ -13,6 +13,8 @@ export const DIFFICULTY = {
     actions: 1, // orders per decision
     reserve: 3, // troops kept at home
     humanBias: 0.9, // >1 means it prefers attacking the human
+    specialBias: 1.2, // how much more it values a special base
+    specialDensity: 0.3, // share of the map that is special bases (more on easier levels)
   },
   normal: {
     interval: 1.6,
@@ -25,6 +27,8 @@ export const DIFFICULTY = {
     actions: 1,
     reserve: 2,
     humanBias: 1,
+    specialBias: 1.5,
+    specialDensity: 0.18,
   },
   hard: {
     interval: 0.9,
@@ -37,6 +41,8 @@ export const DIFFICULTY = {
     actions: 2,
     reserve: 1,
     humanBias: 1.15,
+    specialBias: 1.8,
+    specialDensity: 0.1,
   },
 };
 
@@ -134,7 +140,7 @@ export class AIController {
       if (t.owner === me) continue;
       let nearest = Infinity;
       for (const r of mine) nearest = Math.min(nearest, dist(r, t));
-      const travel = nearest / g.dotSpeed;
+      const travel = nearest / g.speedFor(me);
 
       let defence = t.troops - incoming[t.id][me];
       if (t.owner !== NEUTRAL) {
@@ -149,6 +155,7 @@ export class AIController {
 
       let value = t.size * (t.owner === NEUTRAL ? 1 : 1.35);
       if (t.owner === g.humanId) value *= this.p.humanBias;
+      if (t.special) value *= this.p.specialBias;
       if (t.neighbors.some((n) => g.regions[n].owner === me)) value *= 1.4;
       const noise = 1 + (this.rng.next() * 2 - 1) * this.p.noise;
       const score = (value / (need + plan.maxDist * 0.06 + 5)) * noise;

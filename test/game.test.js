@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, CONFIG, NEUTRAL, RULES, resolveRules, isDefaultRules } from '../src/game.js';
+import { Game, CONFIG, NEUTRAL, RULES, SPECIALS, resolveRules, isDefaultRules } from '../src/game.js';
+import { generateMap, MAP_SIZES } from '../src/map.js';
 
 // Three square regions in a row: 0 | 1 | 2, each 100 wide.
 function lineMap() {
@@ -23,7 +24,7 @@ function lineMap() {
 }
 
 function setup(rules) {
-  const game = new Game({ map: lineMap(), players: 2, humanId: 1, seed: 3, rules });
+  const game = new Game({ map: lineMap(), players: 2, humanId: 1, seed: 3, rules, specialDensity: 0 });
   const [a, b, c] = game.regions;
   Object.assign(a, { owner: 1, troops: 30, capital: true });
   Object.assign(b, { owner: NEUTRAL, troops: 10, capital: false });
@@ -196,4 +197,97 @@ test('start troops never exceed a low population limit', () => {
   const map = lineMap();
   const game = new Game({ map, players: 2, humanId: 1, seed: 3, rules: { populationLimit: 10 } });
   for (const r of game.regions) if (r.owner !== NEUTRAL) assert.ok(r.troops <= r.cap);
+});
+
+// Region 1 (the middle one) becomes a special base of the given type.
+function setupSpecial(type) {
+  const game = setup();
+  game.regions[1].special = type;
+  game.applyBonuses();
+  return game;
+}
+
+const capture = (game, regionId, owner) => {
+  game.regions[0].troops = 60;
+  game.sendCount(owner, 0, regionId, 60);
+  run(game, 4);
+  assert.equal(game.regions[regionId].owner, owner);
+};
+
+test('holding a biology lab speeds up regeneration by 25% on all your bases', () => {
+  const game = setupSpecial('biology');
+  const before = game.regions[0].growth;
+  capture(game, 1, 1);
+  assert.ok(Math.abs(game.regions[0].growth - before * 1.25) < 1e-9);
+  assert.ok(Math.abs(game.regions[1].growth - game.regions[1].baseGrowth * 1.25) < 1e-9);
+  assert.equal(game.regions[2].growth, game.regions[2].baseGrowth, 'enemy unaffected');
+});
+
+test('engineering works speed up the dots you send', () => {
+  const game = setupSpecial('engineering');
+  assert.equal(game.speedFor(1), game.dotSpeed);
+  capture(game, 1, 1);
+  assert.equal(game.speedFor(1), game.dotSpeed * 1.25);
+  game.sendCount(1, 0, 2, 4);
+  run(game, 0.05);
+  const dot = game.dots.find((d) => d.owner === 1);
+  assert.ok(dot.speed >= game.dotSpeed * 1.25 * 0.95);
+});
+
+test('construction yards raise your population limit', () => {
+  const game = setupSpecial('construction');
+  const base = game.regions[0].cap;
+  capture(game, 1, 1);
+  assert.equal(game.regions[0].cap, Math.round(base * 1.25));
+});
+
+test('bonuses stack and move to whoever captures the base', () => {
+  const game = setup();
+  game.regions[1].special = 'biology';
+  game.regions[2].special = 'biology';
+  game.regions[2].owner = 1;
+  game.regions[2].capital = false;
+  game.regions[1].owner = 1;
+  game.applyBonuses();
+  assert.equal(game.bonusFor(1).biology, 1.5);
+  // Player 2 takes one of them back.
+  game.regions[1].owner = 2;
+  game.applyBonuses();
+  assert.equal(game.bonusFor(1).biology, 1.25);
+  assert.equal(game.bonusFor(2).biology, 1.25);
+  assert.equal(game.bonusFor(NEUTRAL).biology, 1);
+});
+
+test('a plain region you capture inherits your bonuses', () => {
+  const game = setup();
+  game.regions[2].special = 'biology'; // owned by player 2
+  game.applyBonuses();
+  game.regions[2].troops = 60;
+  game.sendCount(2, 2, 1, 60);
+  run(game, 4);
+  assert.equal(game.regions[1].owner, 2);
+  assert.ok(Math.abs(game.regions[1].growth - game.regions[1].baseGrowth * 1.25) < 1e-9);
+});
+
+test('specials are neutral, spread out, never next to a start, and scale with density', () => {
+  const count = (density, seed) => {
+    const map = generateMap({ regionCount: MAP_SIZES.medium, seed });
+    const game = new Game({ map, players: 2, humanId: 1, seed, specialDensity: density });
+    const specials = game.regions.filter((r) => r.special);
+    for (const r of specials) {
+      assert.equal(r.owner, NEUTRAL);
+      assert.ok(!r.neighbors.some((n) => game.regions[n].capital), 'next to a start');
+      assert.ok(SPECIALS[r.special]);
+    }
+    for (const type of Object.keys(SPECIALS)) assert.ok(specials.some((r) => r.special === type), `no ${type}`);
+    return specials.length;
+  };
+  for (let seed = 1; seed <= 5; seed++) {
+    const easy = count(0.3, seed);
+    const hard = count(0.1, seed);
+    assert.ok(easy > hard, `seed ${seed}: easy ${easy} vs hard ${hard}`);
+  }
+  const map = generateMap({ regionCount: MAP_SIZES.medium, seed: 1 });
+  const none = new Game({ map, players: 2, humanId: 1, seed: 1, specialDensity: 0 });
+  assert.equal(none.regions.filter((r) => r.special).length, 0);
 });
