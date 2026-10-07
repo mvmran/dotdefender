@@ -48,13 +48,13 @@ use **Actions → Deploy to GitHub Pages → Run workflow**.
 ### Special bases
 
 Some neutral bases carry a badge. Capture one and **all** of your bases get a bonus
-for as long as you hold it. Bonuses stack, and they switch to whoever takes the base:
+for as long as you hold it. Bonuses stack (two biology labs give +100%), and they switch to whoever takes the base:
 
 | Badge | Base | Bonus |
 | --- | --- | --- |
-| Flask | Biology lab | +25% regeneration speed |
-| Gear | Engineering works | +25% movement speed |
-| House | Construction yard | +25% population limit |
+| Flask | Biology lab | +50% regeneration speed |
+| Gear | Engineering works | +50% movement speed |
+| House | Construction yard | +50% population limit |
 
 Special bases start with 50% more defenders than ordinary neutral ones, and the
 computer goes after them too. Easier levels have more of them: on a medium map,

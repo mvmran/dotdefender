@@ -37,12 +37,12 @@ export function resolveRules(overrides = {}) {
   return rules;
 }
 
-// Special neutral bases. Whoever holds one gets a bonus for all their bases;
-// each extra base of the same type adds the bonus again.
+// Special neutral bases. Whoever holds one gets a bonus (+50%) for all their
+// bases; each extra base of the same type adds the bonus again.
 export const SPECIALS = {
-  biology: { name: 'Biology lab', bonus: 0.25, effect: 'regeneration speed' },
-  engineering: { name: 'Engineering works', bonus: 0.25, effect: 'movement speed' },
-  construction: { name: 'Construction yard', bonus: 0.25, effect: 'population limit' },
+  biology: { name: 'Biology lab', bonus: 0.5, effect: 'regeneration speed' },
+  engineering: { name: 'Engineering works', bonus: 0.5, effect: 'movement speed' },
+  construction: { name: 'Construction yard', bonus: 0.5, effect: 'population limit' },
 };
 const SPECIAL_GARRISON = 1.5; // specials start better defended than plain neutrals
 

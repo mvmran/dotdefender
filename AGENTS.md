@@ -80,7 +80,7 @@ Key boundaries:
   sliders from `RULES`.
 - **Special bases** (`SPECIALS` in `game.js`): some neutral regions get
   `region.special` = `biology` | `engineering` | `construction`. Holding one gives
-  the owner +25% regeneration, dot speed or population limit on all their bases,
+  the owner +50% regeneration, dot speed or population limit on all their bases,
   stacking per base held. Regions keep `baseCap` / `baseGrowth`, and
   `applyBonuses()` recomputes `cap` / `growth` from the owner's bonuses after
   every capture. Dot speed per owner is `game.speedFor(owner)`, fixed when a dot

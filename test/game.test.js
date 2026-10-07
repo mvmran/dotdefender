@@ -199,6 +199,13 @@ test('start troops never exceed a low population limit', () => {
   for (const r of game.regions) if (r.owner !== NEUTRAL) assert.ok(r.troops <= r.cap);
 });
 
+// Multiplier from holding one special base.
+const BOOST = 1 + SPECIALS.biology.bonus;
+
+test('every special base gives a 50% boost', () => {
+  for (const spec of Object.values(SPECIALS)) assert.equal(spec.bonus, 0.5);
+});
+
 // Region 1 (the middle one) becomes a special base of the given type.
 function setupSpecial(type) {
   const game = setup();
@@ -214,12 +221,12 @@ const capture = (game, regionId, owner) => {
   assert.equal(game.regions[regionId].owner, owner);
 };
 
-test('holding a biology lab speeds up regeneration by 25% on all your bases', () => {
+test('holding a biology lab speeds up regeneration by 50% on all your bases', () => {
   const game = setupSpecial('biology');
   const before = game.regions[0].growth;
   capture(game, 1, 1);
-  assert.ok(Math.abs(game.regions[0].growth - before * 1.25) < 1e-9);
-  assert.ok(Math.abs(game.regions[1].growth - game.regions[1].baseGrowth * 1.25) < 1e-9);
+  assert.ok(Math.abs(game.regions[0].growth - before * BOOST) < 1e-9);
+  assert.ok(Math.abs(game.regions[1].growth - game.regions[1].baseGrowth * BOOST) < 1e-9);
   assert.equal(game.regions[2].growth, game.regions[2].baseGrowth, 'enemy unaffected');
 });
 
@@ -227,18 +234,18 @@ test('engineering works speed up the dots you send', () => {
   const game = setupSpecial('engineering');
   assert.equal(game.speedFor(1), game.dotSpeed);
   capture(game, 1, 1);
-  assert.equal(game.speedFor(1), game.dotSpeed * 1.25);
+  assert.equal(game.speedFor(1), game.dotSpeed * BOOST);
   game.sendCount(1, 0, 2, 4);
   run(game, 0.05);
   const dot = game.dots.find((d) => d.owner === 1);
-  assert.ok(dot.speed >= game.dotSpeed * 1.25 * 0.95);
+  assert.ok(dot.speed >= game.dotSpeed * BOOST * 0.95);
 });
 
 test('construction yards raise your population limit', () => {
   const game = setupSpecial('construction');
   const base = game.regions[0].cap;
   capture(game, 1, 1);
-  assert.equal(game.regions[0].cap, Math.round(base * 1.25));
+  assert.equal(game.regions[0].cap, Math.round(base * BOOST));
 });
 
 test('bonuses stack and move to whoever captures the base', () => {
@@ -249,12 +256,12 @@ test('bonuses stack and move to whoever captures the base', () => {
   game.regions[2].capital = false;
   game.regions[1].owner = 1;
   game.applyBonuses();
-  assert.equal(game.bonusFor(1).biology, 1.5);
+  assert.equal(game.bonusFor(1).biology, 1 + 2 * SPECIALS.biology.bonus);
   // Player 2 takes one of them back.
   game.regions[1].owner = 2;
   game.applyBonuses();
-  assert.equal(game.bonusFor(1).biology, 1.25);
-  assert.equal(game.bonusFor(2).biology, 1.25);
+  assert.equal(game.bonusFor(1).biology, BOOST);
+  assert.equal(game.bonusFor(2).biology, BOOST);
   assert.equal(game.bonusFor(NEUTRAL).biology, 1);
 });
 
@@ -266,7 +273,7 @@ test('a plain region you capture inherits your bonuses', () => {
   game.sendCount(2, 2, 1, 60);
   run(game, 4);
   assert.equal(game.regions[1].owner, 2);
-  assert.ok(Math.abs(game.regions[1].growth - game.regions[1].baseGrowth * 1.25) < 1e-9);
+  assert.ok(Math.abs(game.regions[1].growth - game.regions[1].baseGrowth * BOOST) < 1e-9);
 });
 
 test('specials are neutral, spread out, never next to a start, and scale with density', () => {

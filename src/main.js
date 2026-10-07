@@ -124,6 +124,11 @@ function syncCheats() {
 buildCheatMenu();
 syncCheats();
 document.querySelectorAll('[data-icon]').forEach((el) => (el.innerHTML = iconSvg(el.dataset.icon, 16)));
+// Help text reads the bonus from SPECIALS so it can't drift from the game.
+document.querySelectorAll('[data-bonus]').forEach((el) => {
+  const spec = SPECIALS[el.dataset.bonus];
+  el.textContent = `+${Math.round(spec.bonus * 100)}% ${spec.effect}`;
+});
 $('#cheats-btn').addEventListener('click', () => show('cheats'));
 $('#cheat-back').addEventListener('click', () => show('menu'));
 $('#cheat-reset').addEventListener('click', () => {
