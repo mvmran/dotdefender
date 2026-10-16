@@ -135,7 +135,12 @@ headlessly with `new Game({ map, players, humanId: null, seed })` and step them 
   `window.dotdefender` exposes `game`, `renderer` and `input`. Headless browser
   checks can use it to find base positions:
   `renderer.worldToScreen(region.cx, region.cy)`.
-- Check both a desktop viewport and a portrait phone viewport (the rotated layout).
+- Check a desktop viewport, a portrait phone (the rotated map) and a landscape
+  phone (the compact HUD). Fill the HUD (cheats on, every special base held, both
+  perks) and make sure nothing is off-screen. The HUD wraps on smaller screens,
+  so anything in it that changes width mid-game can re-wrap it and move the map.
+  That's why perk buttons keep one width in every state. `layout()` in `main.js`
+  also only moves the map down during a game, never back up.
 
 ## Deployment
 

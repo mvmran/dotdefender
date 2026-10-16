@@ -156,6 +156,11 @@ button {
   opacity: 0;
 }
 
+/* Laser aiming instructions show even after the drag hint has faded. */
+.hint.aim {
+  opacity: 1;
+}
+
 .cheat-tag {
   padding: 3px 8px;
   border-radius: 999px;
@@ -250,6 +255,7 @@ button {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
   height: 34px;
   padding: 0 10px 0 7px;
@@ -277,8 +283,12 @@ button {
   position: relative;
 }
 
-.perk-time:empty {
-  display: none;
+/* A perk button keeps one width whether it is charging, ready or aiming. If it
+   changed, the HUD could re-wrap and the map would jump mid-game. So the
+   countdown keeps its room even when empty. */
+.perk-time {
+  display: inline-block;
+  min-width: 3ch;
 }
 
 .perk-btn [data-icon] {
@@ -510,17 +520,19 @@ h2 {
   color: var(--muted);
 }
 
-/* Phones, upright or on their side (short landscape screens). */
-@media (max-width: 640px), (max-height: 500px) {
-  /* Icon and countdown only, so the bar fits on a phone. */
+/* Phones, upright or on their side. Wider short windows (a desktop browser)
+   fit the full bar. */
+@media (max-width: 640px), (max-height: 500px) and (max-width: 1100px) {
+  /* Icon and countdown only, so the bar fits on a phone. The minimum width is
+     icon + gap + countdown + padding, so a ready button (icon centred, no
+     countdown) is as wide as a charging one. */
   .perk-btn {
+    min-width: calc(5px + 22px + 5px + 3ch + 7px);
     padding: 0 7px 0 5px;
   }
-  .perk-btn .perk-name {
+  .perk-btn .perk-name,
+  .perk-time:empty {
     display: none;
-  }
-  .perk-btn.aiming .perk-name {
-    display: inline;
   }
   .hud-controls {
     gap: 6px;

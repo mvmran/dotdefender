@@ -168,7 +168,7 @@ function toMenu() {
   startAttract();
   hud.hidden = true;
   hint.hidden = true;
-  layout();
+  layout({ fresh: true });
   show('menu');
 }
 
@@ -206,8 +206,9 @@ function start(seed = randomSeed()) {
   hud.hidden = false;
   hint.hidden = false;
   hint.classList.remove('fade');
+  setAimHint(false);
   buildPowerBar();
-  layout();
+  layout({ fresh: true });
   show(null);
 }
 
@@ -281,7 +282,19 @@ let perkWasReady = {};
 const perkButtons = Object.fromEntries(Object.keys(PERKS).map((perk) => [perk, $(`#${perk}-btn`)]));
 for (const [perk, btn] of Object.entries(perkButtons)) {
   btn.style.setProperty('--perk-color', ICON_COLORS[perk]); // matches the icon and the map effects
+  btn.querySelector('.perk-name').textContent = PERKS[perk].label;
   btn.addEventListener('click', () => usePerk(perk));
+}
+
+// While the laser is being aimed, the hint pill says what to do. The button
+// itself keeps its text, so its width (and the HUD's wrapping) doesn't change.
+const HINT_HTML = hint.innerHTML;
+let hintAiming = false;
+function setAimHint(on) {
+  if (on === hintAiming) return;
+  hintAiming = on;
+  hint.innerHTML = on ? 'Pick a base to wipe out · press the laser again to cancel' : HINT_HTML;
+  hint.classList.toggle('aim', on);
 }
 
 function usePerk(perk) {
@@ -297,6 +310,7 @@ function usePerk(perk) {
 function updatePerks() {
   // Stop aiming once the laser can't fire: its bases were lost or the game ended.
   if (input.targeting && (game.status !== 'playing' || !game.perkStatus(HUMAN, 'laser').ready)) input.stopTargeting();
+  setAimHint(Boolean(input.targeting));
   for (const [perk, spec] of Object.entries(PERKS)) {
     const st = game.perkStatus(HUMAN, perk);
     const btn = perkButtons[perk];
@@ -309,12 +323,9 @@ function updatePerks() {
     // In whole percent steps, so the bar isn't restyled every frame.
     const charge = st.ready || st.active ? 0 : Math.round((1 - st.charge / game.perkTimes[perk].recharge) * 100) / 100;
     if (btn.style.getPropertyValue('--charge') !== String(charge)) btn.style.setProperty('--charge', String(charge));
-    let name = spec.label;
     let time = '';
-    if (aiming) name = 'Pick a base';
-    else if (st.active > 0) time = `${Math.ceil(st.active)}s`;
+    if (st.active > 0) time = `${Math.ceil(st.active)}s`;
     else if (!st.ready) time = `${Math.ceil(st.charge)}s`;
-    setText(btn.querySelector('.perk-name'), name);
     setText(btn.querySelector('.perk-time'), time);
     if (st.ready && !perkWasReady[perk]) {
       toast(`${iconSvg(perk, 18)}<span><b>${spec.name} ready!</b> Tap the button or press ${spec.key}.</span>`);
@@ -419,14 +430,20 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ----- Layout and main loop -----
-function layout() {
+// The HUD wraps taller on smaller screens when bonus chips or perk buttons
+// appear, and the map moves down to stay clear of it. During a game it never
+// moves back up, so a bar that wraps and unwraps can't make the map jump back
+// and forth under the player's finger. A new game, the menu or a window resize
+// lays out afresh.
+let hudBottom = 0;
+function layout({ fresh = false } = {}) {
   const h = hud.hidden ? 0 : hud.getBoundingClientRect().bottom;
-  renderer.insets.top = Math.max(16, h + 4);
+  hudBottom = fresh ? h : Math.max(hudBottom, h);
+  renderer.insets.top = Math.max(16, hudBottom + 4);
   toasts.style.top = `${Math.max(16, h + 10)}px`; // just below the HUD
   renderer.resize();
 }
-window.addEventListener('resize', layout);
-// On phones the HUD wraps taller when perk buttons or bonus chips appear.
+window.addEventListener('resize', () => layout({ fresh: true }));
 new ResizeObserver(() => layout()).observe(hud);
 
 let last = performance.now();
