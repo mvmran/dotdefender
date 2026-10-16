@@ -314,3 +314,26 @@ test('long strikes at enemy bases: never on easy, some on normal, most on hard',
   assert.ok(normal > 0.003, `normal ${normal}`);
   assert.ok(hard > normal * 2, `hard ${hard} vs normal ${normal}`);
 });
+
+test('computer assist plays for the human without overriding their orders', () => {
+  const map = generateMap({ regionCount: 20, seed: 7 });
+  const game = new Game({ map, players: 2, humanId: 1, seed: 7, specialDensity: 0 });
+  const assist = new AIController(game, 1, 'normal', 7);
+  const home = game.regions.find((r) => r.owner === 1);
+  home.troops = 40;
+  // The player sends a stream to a far region the assistant would never pick.
+  const far = game.regions.filter((r) => r.owner === NEUTRAL).sort((a, b) => Math.hypot(b.cx - home.cx, b.cy - home.cy) - Math.hypot(a.cx - home.cx, a.cy - home.cy))[0];
+  assert.ok(game.sendCount(1, home.id, far.id, 30));
+  for (let i = 0; i < 20; i++) {
+    assist.think();
+    assert.equal(game.orders.get(home.id)?.target ?? far.id, far.id, 'the player order is untouched');
+  }
+  // Left to itself, the assistant expands the human's territory.
+  const helped = new Game({ map, players: 2, humanId: 1, seed: 7, specialDensity: 0 });
+  const helper = new AIController(helped, 1, 'normal', 7);
+  for (let t = 0; t < 30; t += 1 / 60) {
+    helped.step(1 / 60);
+    helper.update(1 / 60);
+  }
+  assert.ok(helped.territory(1) >= 3, `assist holds ${helped.territory(1)} regions after 30 s`);
+});

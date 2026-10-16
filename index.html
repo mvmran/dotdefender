@@ -14,6 +14,7 @@
     <header id="hud" hidden>
       <div class="hud-brand">Dot&nbsp;Defender</div>
       <span id="cheat-tag" class="cheat-tag" title="Cheat menu settings are active" hidden>Cheats</span>
+      <span id="assist-tag" class="cheat-tag assist-tag" title="Computer assist is playing for you" hidden>Assist</span>
       <div id="bonuses" class="bonuses" aria-label="Your special base bonuses"></div>
       <div id="power" class="power" aria-label="Territory share"></div>
       <div class="hud-controls">
@@ -70,6 +71,15 @@
           </div>
         </div>
 
+        <div class="field">
+          <label for="assist-toggle">Computer assist</label>
+          <label class="switch">
+            <input type="checkbox" id="assist-toggle" role="switch" aria-describedby="assist-note" />
+            <span></span>
+          </label>
+        </div>
+        <p id="assist-note" class="field-note">The computer plays blue for you. You can still give orders yourself.</p>
+
         <button id="play-btn" class="primary">Play</button>
         <div class="cheat-row">
           <button id="cheats-btn" class="link-btn">Cheat menu</button>
@@ -87,6 +97,7 @@
             <li>Enemy dots that meet yours in the field destroy each other one for one.</li>
             <li>Send to your own region to reinforce it. Keys <b>1–4</b> choose 25/50/75/100% of troops.</li>
             <li>Bigger regions grow faster and hold more. Take every enemy base to win.</li>
+            <li><b>Computer assist</b> lets the computer play your bases too. Its orders never cut across yours: a base you have sent stays on your order until it is done.</li>
             <li>On <b>Easy</b> the computer is slow to start, slow to decide, and often moves at random.</li>
             <li>
               Some neutral bases carry a badge. Hold one and <b>all</b> your bases get a bonus, which stacks:

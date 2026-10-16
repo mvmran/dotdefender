@@ -142,6 +142,12 @@ Key boundaries:
 
   Easy reaches 2.5 cells with no strikes, Normal reaches 4 cells and sometimes
   strikes enemy bases, and Hard has unlimited reach and strikes most.
+
+  **Computer assist** (`settings.assist`, a switch on the menu, default off)
+  makes `main.js` also run an `AIController` for the human, at `ASSIST_LEVEL`
+  (Normal). It never overrides the player: the AI only sends from bases with
+  no running order (`avail` is 0 for those, and `randomMove` skips them). Keep
+  it that way. `test/ai.test.js` checks it.
 - Coordinates are world units. The average cell area is constant (`CELL_AREA` in
   `map.js`), so speeds and sizes feel the same on every map size. The renderer
   fits `map.bounds` to the screen and rotates 90° on portrait screens, so always

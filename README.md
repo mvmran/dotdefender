@@ -64,6 +64,14 @@ use **Actions → Deploy to GitHub Pages → Run workflow**.
   prioritises special bases and you. It sends troops anywhere, and often makes
   strategic strikes across the map at enemy bases or the regions around them.
 
+### Computer assist
+
+Switch on **Computer assist** in the main menu and the computer plays blue for
+you, at Normal strength. You can still give orders at any time. The assistant
+only uses bases that aren't already sending troops, so it never cuts across an
+order you gave. An **Assist** tag in the top bar shows it's on. It's off by
+default, and the setting is remembered between visits.
+
 ### Special bases
 
 Some neutral bases carry a badge. Capture one and **all** of your bases get a bonus

@@ -9,6 +9,8 @@ import { randomSeed } from './rng.js';
 
 const STEP = 1 / 60;
 const HUMAN = 1;
+// Computer assist plays the human's bases at this level, whatever the difficulty.
+const ASSIST_LEVEL = 'normal';
 const SETTINGS_KEY = 'dotdefender.settings';
 
 const $ = (sel) => document.querySelector(sel);
@@ -38,10 +40,10 @@ const input = new InputController(canvas, renderer, {
 });
 
 function loadSettings() {
-  const defaults = { difficulty: 'normal', opponents: '1', size: 'medium', ratio: 1 };
+  const defaults = { difficulty: 'normal', opponents: '1', size: 'medium', ratio: 1, assist: false };
   try {
     const saved = { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
-    return { ...saved, rules: resolveRules(saved.rules) };
+    return { ...saved, assist: saved.assist === true, rules: resolveRules(saved.rules) };
   } catch {
     return { ...defaults, rules: resolveRules() };
   }
@@ -68,6 +70,13 @@ document.querySelectorAll('.segmented').forEach((group) => {
     syncHelp();
   });
   sync();
+});
+
+const assistToggle = $('#assist-toggle');
+assistToggle.checked = settings.assist;
+assistToggle.addEventListener('change', () => {
+  settings.assist = assistToggle.checked;
+  saveSettings();
 });
 
 function setRatio(r) {
@@ -198,6 +207,10 @@ function start(seed = randomSeed()) {
   $('#cheat-tag').hidden = isDefaultRules(game.rules);
   ais = [];
   for (let i = 0; i < opponents; i++) ais.push(new AIController(game, HUMAN + 1 + i, settings.difficulty, seed));
+  // The assistant only uses bases that aren't already streaming troops, so it
+  // never overrides an order the player gave.
+  if (settings.assist) ais.push(new AIController(game, HUMAN, ASSIST_LEVEL, seed));
+  $('#assist-tag').hidden = !settings.assist;
   renderer.setGame(game);
   input.reset();
   input.enabled = true;
