@@ -54,12 +54,15 @@ use **Actions → Deploy to GitHub Pages → Run workflow**.
   about every 5 seconds. Nearly half its moves are random: a random base sends a
   random share of its troops to a random region, with no planning. It also defends
   less, misjudges targets more and would rather fight the other computers than
-  you. Maps have the most special bases.
+  you. Its troops never travel far: only nearby regions (about two and a half
+  regions away) get attacked. Maps have the most special bases.
 - **Normal:** plans every move, but takes a few seconds to get going, thinks about
   every 2 seconds, sometimes misjudges a target, doesn't always defend, and goes
-  after you a little less than after other computers.
+  after you a little less than after other computers. It mostly fights nearby,
+  but now and then strikes an enemy base across the map.
 - **Hard:** quick, accurate, defends everything, can make two moves at once, and
-  prioritises special bases and you.
+  prioritises special bases and you. It sends troops anywhere, and often makes
+  strategic strikes across the map at enemy bases or the regions around them.
 
 ### Special bases
 

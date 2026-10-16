@@ -4,6 +4,8 @@ import { voronoi, polygonArea, polygonCentroid } from './geometry.js';
 // Average world-space area of one Voronoi cell. Keeping this constant means
 // dot speed and base sizes feel the same on every map size.
 const CELL_AREA = 15000;
+// Roughly the distance between neighbouring region centres.
+export const CELL_SIZE = Math.sqrt(CELL_AREA);
 
 export const MAP_SIZES = {
   small: 16,

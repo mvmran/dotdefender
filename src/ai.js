@@ -1,5 +1,6 @@
 import { createRng } from './rng.js';
 import { NEUTRAL, PERKS } from './game.js';
+import { CELL_SIZE } from './map.js';
 
 export const DIFFICULTY = {
   easy: {
@@ -14,6 +15,15 @@ export const DIFFICULTY = {
     actions: 1, // orders per decision
     reserve: 3, // troops kept at home
     humanBias: 0.75, // >1 means it prefers attacking the human
+    // How far troops travel (in cells, ~ one region across). A region next to
+    // the sending base is always in reach.
+    reach: 2.5,
+    // Chance an attack is a strategic strike at an enemy base over 3 cells
+    // from the AI's nearest base (with longShotRing, also at regions next to
+    // enemy bases), drawing troops from any distance. It only goes ahead when
+    // it's worth at least half the best nearby attack.
+    longShot: 0,
+    longShotRing: false,
     specialBias: 1.2, // how much more it values a special base
     specialDensity: 0.3, // share of the map that is special bases (more on easier levels)
     // Super perk timings (seconds); used by every player in the game.
@@ -31,6 +41,9 @@ export const DIFFICULTY = {
     actions: 1,
     reserve: 2,
     humanBias: 0.9,
+    reach: 4,
+    longShot: 0.4,
+    longShotRing: false,
     specialBias: 1.5,
     specialDensity: 0.18,
     perks: { laser: { recharge: 45 }, regen: { duration: 10, recharge: 60 } },
@@ -47,6 +60,9 @@ export const DIFFICULTY = {
     actions: 2,
     reserve: 1,
     humanBias: 1.15,
+    reach: Infinity,
+    longShot: 0.4,
+    longShotRing: true,
     specialBias: 1.8,
     specialDensity: 0.1,
     perks: { laser: { recharge: 60 }, regen: { duration: 10, recharge: 80 } },
@@ -54,6 +70,7 @@ export const DIFFICULTY = {
 };
 
 const dist = (a, b) => Math.hypot(a.cx - b.cx, a.cy - b.cy);
+const FAR = 3 * CELL_SIZE; // a long shot's target is at least this far from the attacker
 
 // Special base types that unlock a super perk once you hold every one.
 const PERK_SPECIALS = new Set(Object.values(PERKS).map((p) => p.special));
@@ -71,6 +88,13 @@ export class AIController {
     this.p = DIFFICULTY[difficulty] ?? DIFFICULTY.normal;
     this.rng = createRng(seed * 7919 + owner);
     this.timer = this.p.startDelay;
+    this.reach = this.p.reach * CELL_SIZE;
+  }
+
+  // Whether troops from `src` will travel to `t`: within the level's reach,
+  // or right next door.
+  canReach(src, t, reach = this.reach) {
+    return dist(src, t) <= reach || src.neighbors.includes(t.id);
   }
 
   update(dt) {
@@ -126,7 +150,12 @@ export class AIController {
 
     let launched = 0; // troops this decision sends at regions we don't own
     while (actions > 0) {
-      const plan = this.bestAttack(mine, incoming, avail);
+      // Now and then a strategic strike across the map (see longShot), but
+      // only if it is worth at least half the best nearby attack.
+      const longShot = this.p.longShot > 0 && this.rng.next() < this.p.longShot;
+      let plan = this.bestAttack(mine, incoming, avail);
+      const far = longShot && this.bestAttack(mine, incoming, avail, true);
+      if (far && (!plan || far.score >= plan.score * 0.5)) plan = far;
       if (!plan) break;
       launched += this.execute(plan, plan.target, avail);
       actions--;
@@ -185,18 +214,18 @@ export class AIController {
     const sources = mine.filter((r) => r.troops >= 2 && !g.orders.has(r.id));
     if (!sources.length) return 0;
     const src = this.rng.pick(sources);
-    const targets = g.regions.filter((r) => r.id !== src.id);
+    const targets = g.regions.filter((r) => r.id !== src.id && this.canReach(src, r));
     const target = this.rng.pick(targets);
     const count = Math.max(1, Math.floor(src.troops * this.rng.range(0.3, 1)));
     if (!g.sendCount(this.owner, src.id, target.id, count) || target.owner === this.owner) return 0;
     return count;
   }
 
-  // Picks nearby sources until `need` troops are covered. Returns null when
-  // they cannot cover at least `minFraction` of it.
-  gather(target, need, mine, avail, minFraction = 1) {
+  // Picks nearby sources (within `reach`) until `need` troops are covered.
+  // Returns null when they cannot cover at least `minFraction` of it.
+  gather(target, need, mine, avail, minFraction = 1, reach = this.reach) {
     const sources = mine
-      .filter((r) => r.id !== target.id && avail.get(r.id) > 0)
+      .filter((r) => r.id !== target.id && avail.get(r.id) > 0 && this.canReach(r, target, reach))
       .sort((a, b) => dist(a, target) - dist(b, target))
       .slice(0, this.p.maxSources);
     const parts = [];
@@ -213,7 +242,9 @@ export class AIController {
     return { parts, total, maxDist };
   }
 
-  bestAttack(mine, incoming, avail) {
+  // The best target to attack, or null. With `longShot`, only far enemy
+  // targets count, and troops may come from any distance.
+  bestAttack(mine, incoming, avail, longShot = false) {
     const g = this.game;
     const me = this.owner;
     let best = null;
@@ -221,6 +252,7 @@ export class AIController {
       if (t.owner === me) continue;
       let nearest = Infinity;
       for (const r of mine) nearest = Math.min(nearest, dist(r, t));
+      if (longShot && !(nearest > FAR && this.isLongShotTarget(t))) continue;
       const travel = nearest / g.speedFor(me);
 
       let defence = t.troops - incoming[t.id][me];
@@ -233,7 +265,7 @@ export class AIController {
       // left behind, also needs only `flat`, but nothing is on its way there.)
       if (need <= this.p.flat && incoming[t.id][me] > 0) continue;
 
-      const plan = this.gather(t, need, mine, avail);
+      const plan = this.gather(t, need, mine, avail, 1, longShot ? Infinity : this.reach);
       if (!plan) continue;
 
       const noise = 1 + (this.rng.next() * 2 - 1) * this.p.noise;
@@ -241,6 +273,12 @@ export class AIController {
       if (!best || score > best.score) best = { ...plan, target: t, score };
     }
     return best;
+  }
+
+  // Enemy territory, or (with longShotRing) a region next to it.
+  isLongShotTarget(t) {
+    const enemy = (r) => r.owner !== NEUTRAL && r.owner !== this.owner;
+    return enemy(t) || (this.p.longShotRing && t.neighbors.some((n) => enemy(this.game.regions[n])));
   }
 
   // How much the AI wants region `t`, before cost, distance and noise.

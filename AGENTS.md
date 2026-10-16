@@ -123,7 +123,11 @@ rule ranges live in `RULES` (`game.js`). After changing
 them, run `npm test`. `test/ai.test.js` asserts that hard reliably beats easy,
 normal usually beats easy, AIs expand early, and that easy keeps its handicaps
 (`startDelay`, `interval` and `randomMove`, the share of decisions that are
-random moves; only easy has it above 0). For a broader check, simulate many seeded AI-vs-AI games
+random moves; only easy has it above 0), that easy troops never travel more
+than 3 cells, and that long strikes at enemy bases go easy (none) < normal <
+hard. Reach and long strikes are `reach`, `longShot` and `longShotRing` in
+`DIFFICULTY`, measured in cells (`CELL_SIZE` in `map.js`, about one region
+across). For a broader check, simulate many seeded AI-vs-AI games
 headlessly with `new Game({ map, players, humanId: null, seed })` and step them in a loop.
 
 ## Testing changes

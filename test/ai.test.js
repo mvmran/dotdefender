@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { generateMap } from '../src/map.js';
+import { generateMap, CELL_SIZE } from '../src/map.js';
 import { Game, NEUTRAL } from '../src/game.js';
 import { AIController, DIFFICULTY } from '../src/ai.js';
 
@@ -267,4 +267,50 @@ test('AI counts the attack it is launching when it decides on super regeneration
   new AIController(game, 2, 'normal', 5).think();
   assert.ok(game.orders.size > 0, 'it attacked');
   assert.ok(game.perkStatus(2, 'regen').active > 0, 'and started super regeneration with it');
+});
+
+// Plays 3-AI games at one level and records every attack (an order at a region
+// the sender doesn't own): how many cells the troops travel and what it hits.
+function attacks(level, seeds) {
+  const out = [];
+  for (const seed of seeds) {
+    const map = generateMap({ regionCount: 26, seed });
+    const game = new Game({ map, players: 3, humanId: null, seed, specialDensity: DIFFICULTY[level].specialDensity });
+    const send = game.sendCount.bind(game);
+    game.sendCount = (owner, s, t, n) => {
+      const ok = send(owner, s, t, n);
+      const [src, tgt] = [game.regions[s], game.regions[t]];
+      if (ok && tgt.owner !== owner) {
+        out.push({ cells: Math.hypot(src.cx - tgt.cx, src.cy - tgt.cy) / CELL_SIZE, neighbour: src.neighbors.includes(t), enemy: tgt.owner !== NEUTRAL });
+      }
+      return ok;
+    };
+    const ais = [1, 2, 3].map((id) => new AIController(game, id, level, seed));
+    while (game.status === 'playing' && game.time < 300) {
+      game.step(1 / 60);
+      for (const a of ais) a.update(1 / 60);
+      game.events.length = 0;
+    }
+  }
+  return out;
+}
+
+test('easy AI troops never cross the map', () => {
+  const list = attacks('easy', [1, 2, 3]);
+  assert.ok(list.length > 100);
+  // A medium map is about 10 cells corner to corner.
+  const tooFar = list.filter((a) => a.cells > 3 && !a.neighbour);
+  assert.equal(tooFar.length, 0, `${tooFar.length} attacks beyond 3 cells`);
+});
+
+test('long strikes at enemy bases: never on easy, some on normal, most on hard', () => {
+  const share = (level) => {
+    const list = attacks(level, [1, 2, 3, 4]);
+    // Beyond normal's everyday reach, so only its long shots count.
+    return list.filter((a) => a.cells > DIFFICULTY.normal.reach && a.enemy).length / list.length;
+  };
+  const [easy, normal, hard] = ['easy', 'normal', 'hard'].map(share);
+  assert.equal(easy, 0);
+  assert.ok(normal > 0.003, `normal ${normal}`);
+  assert.ok(hard > normal * 2, `hard ${hard} vs normal ${normal}`);
 });
