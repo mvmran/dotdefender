@@ -1,7 +1,7 @@
 import { generateMap, MAP_SIZES } from './map.js';
 import { Game, CONFIG, RULES, SPECIALS, PERKS, resolveRules, isDefaultRules } from './game.js';
 import { AIController, DIFFICULTY, perkTimesFor } from './ai.js';
-import { iconSvg } from './icons.js';
+import { iconSvg, ICON_COLORS } from './icons.js';
 import { Renderer } from './render.js';
 import { InputController } from './input.js';
 import { PALETTE } from './palette.js';
@@ -15,6 +15,8 @@ const $ = (sel) => document.querySelector(sel);
 const canvas = $('#game');
 const hud = $('#hud');
 const hint = $('#hint');
+const toasts = $('#toasts');
+const clock = $('#clock');
 const overlay = $('#overlay');
 const cards = { menu: $('#menu'), cheats: $('#cheat-card'), pause: $('#pause-card'), end: $('#end-card') };
 
@@ -63,6 +65,7 @@ document.querySelectorAll('.segmented').forEach((group) => {
     settings[key] = b.dataset.value;
     saveSettings();
     sync();
+    syncHelp();
   });
   sync();
 });
@@ -124,11 +127,20 @@ function syncCheats() {
 buildCheatMenu();
 syncCheats();
 document.querySelectorAll('[data-icon]').forEach((el) => (el.innerHTML = iconSvg(el.dataset.icon, 16)));
-// Help text reads the bonus from SPECIALS so it can't drift from the game.
+// Help text reads bonuses and perk timings from the game so it can't drift.
 document.querySelectorAll('[data-bonus]').forEach((el) => {
   const spec = SPECIALS[el.dataset.bonus];
   el.textContent = `+${Math.round(spec.bonus * 100)}% ${spec.effect}`;
 });
+// Perk timings depend on the chosen difficulty.
+function syncHelp() {
+  const times = perkTimesFor(settings.difficulty);
+  const level = $(`[data-setting="difficulty"] [data-value="${settings.difficulty}"]`)?.textContent ?? 'Normal';
+  const recharge = Object.entries(PERKS).map(([perk, spec]) => `${spec.name.toLowerCase()} ${times[perk].recharge} s`);
+  $('[data-perk-recharge]').textContent = `on ${level}: ${recharge.join(', ')}`;
+  document.querySelectorAll('[data-perk-duration]').forEach((el) => (el.textContent = `${times[el.dataset.perkDuration].duration} seconds`));
+}
+syncHelp();
 $('#cheats-btn').addEventListener('click', () => show('cheats'));
 $('#cheat-back').addEventListener('click', () => show('menu'));
 $('#cheat-reset').addEventListener('click', () => {
@@ -152,6 +164,7 @@ $('#menu-btn').addEventListener('click', toMenu);
 
 function toMenu() {
   input.enabled = false;
+  input.reset();
   startAttract();
   hud.hidden = true;
   hint.hidden = true;
@@ -178,9 +191,10 @@ function start(seed = randomSeed()) {
   const specialDensity = DIFFICULTY[settings.difficulty].specialDensity;
   const perkTimes = perkTimesFor(settings.difficulty);
   game = new Game({ map, players: opponents + 1, humanId: HUMAN, seed, rules: settings.rules, specialDensity, perkTimes });
-  perkWasReady = { laser: false, regen: false };
+  perkWasReady = {};
   lastBonusKey = '';
-  $('#toast').hidden = true;
+  lastPowerKey = '';
+  toasts.replaceChildren();
   $('#cheat-tag').hidden = isDefaultRules(game.rules);
   ais = [];
   for (let i = 0; i < opponents; i++) ais.push(new AIController(game, HUMAN + 1 + i, settings.difficulty, seed));
@@ -228,14 +242,23 @@ function updateBonuses() {
     .join('');
 }
 
-let toastTimer = null;
+// Messages stack rather than replace each other: one frame can raise several
+// (capturing the last biology lab also unlocks super regeneration).
+const TOAST_LIMIT = 3;
 function toast(html) {
-  const el = $('#toast');
+  const el = document.createElement('div');
+  el.className = 'toast';
   el.innerHTML = html;
-  el.hidden = false;
-  el.classList.remove('out');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add('out'), 2600);
+  toasts.append(el);
+  while (toasts.children.length > TOAST_LIMIT) toasts.firstElementChild.remove();
+  setTimeout(() => el.classList.add('out'), 2600);
+  setTimeout(() => el.remove(), 3100); // once faded out
+}
+
+// The HUD redraws every frame. Writing only what changed keeps the browser
+// from restyling it 60 times a second.
+function setText(el, text) {
+  if (el.textContent !== text) el.textContent = text;
 }
 
 // Tells the human when they win or lose a special base. Runs before the
@@ -254,48 +277,50 @@ function announceSpecials() {
 }
 
 // ----- Super perks -----
-let perkWasReady = { laser: false, regen: false };
+let perkWasReady = {};
+const perkButtons = Object.fromEntries(Object.keys(PERKS).map((perk) => [perk, $(`#${perk}-btn`)]));
+for (const [perk, btn] of Object.entries(perkButtons)) {
+  btn.style.setProperty('--perk-color', ICON_COLORS[perk]); // matches the icon and the map effects
+  btn.addEventListener('click', () => usePerk(perk));
+}
 
 function usePerk(perk) {
   if (!game || game.humanId !== HUMAN || paused || game.status !== 'playing') return;
-  if (perk === 'regen') {
+  if (perk === 'laser') {
+    if (input.targeting) input.stopTargeting(); // pressing again cancels aiming
+    else if (game.perkStatus(HUMAN, perk).ready) input.startTargeting((id) => game.fireLaser(HUMAN, id));
+  } else if (perk === 'regen') {
     game.activateRegen(HUMAN);
-  } else if (input.targeting) {
-    input.stopTargeting(); // pressing again cancels aiming
-  } else if (game.perkStatus(HUMAN, 'laser').ready) {
-    input.startTargeting((id) => game.fireLaser(HUMAN, id));
   }
 }
 
-document.querySelectorAll('.perk-btn').forEach((b) => b.addEventListener('click', () => usePerk(b.dataset.perk)));
-
 function updatePerks() {
-  const times = game.perkTimes;
-  for (const perk of Object.keys(PERKS)) {
+  // Stop aiming once the laser can't fire: its bases were lost or the game ended.
+  if (input.targeting && (game.status !== 'playing' || !game.perkStatus(HUMAN, 'laser').ready)) input.stopTargeting();
+  for (const [perk, spec] of Object.entries(PERKS)) {
     const st = game.perkStatus(HUMAN, perk);
-    const btn = $(`#${perk}-btn`);
-    btn.hidden = !st.unlocked;
+    const btn = perkButtons[perk];
+    if (btn.hidden === st.unlocked) btn.hidden = !st.unlocked;
     if (!st.unlocked) continue;
     const aiming = perk === 'laser' && Boolean(input.targeting);
-    const total = perk === 'laser' ? times.laserRecharge : times.regenRecharge;
     btn.classList.toggle('ready', st.ready && !aiming);
     btn.classList.toggle('active', st.active > 0);
     btn.classList.toggle('aiming', aiming);
-    btn.style.setProperty('--charge', st.ready || st.active ? 0 : String(1 - st.charge / total));
-    let name = perk === 'laser' ? 'Laser' : 'Regen';
+    // In whole percent steps, so the bar isn't restyled every frame.
+    const charge = st.ready || st.active ? 0 : Math.round((1 - st.charge / game.perkTimes[perk].recharge) * 100) / 100;
+    if (btn.style.getPropertyValue('--charge') !== String(charge)) btn.style.setProperty('--charge', String(charge));
+    let name = spec.label;
     let time = '';
     if (aiming) name = 'Pick a base';
     else if (st.active > 0) time = `${Math.ceil(st.active)}s`;
     else if (!st.ready) time = `${Math.ceil(st.charge)}s`;
-    btn.querySelector('.perk-name').textContent = name;
-    btn.querySelector('.perk-time').textContent = time;
+    setText(btn.querySelector('.perk-name'), name);
+    setText(btn.querySelector('.perk-time'), time);
     if (st.ready && !perkWasReady[perk]) {
-      const key = perk === 'laser' ? 'L' : 'R';
-      toast(`${iconSvg(perk, 18)}<span><b>${PERKS[perk].name} ready!</b> Tap the button or press ${key}.</span>`);
+      toast(`${iconSvg(perk, 18)}<span><b>${spec.name} ready!</b> Tap the button or press ${spec.key}.</span>`);
     }
     perkWasReady[perk] = st.ready;
   }
-  canvas.classList.toggle('aiming', Boolean(input.targeting));
 }
 
 function announcePerks() {
@@ -319,28 +344,31 @@ function announcePerks() {
   }
 }
 
-let hudHeight = 0;
+// Territory shares only change on a capture, so only then resize the bar.
+let lastPowerKey = '';
+function updatePower() {
+  const counts = Array.from({ length: game.playerCount }, (_, id) => game.territory(id));
+  const key = counts.join();
+  if (key === lastPowerKey) return;
+  lastPowerKey = key;
+  const segs = $('#power').children;
+  const share = (id) => `${(counts[id] / game.regions.length) * 100}%`;
+  for (let id = 1; id < game.playerCount; id++) segs[id - 1].style.width = share(id);
+  segs[segs.length - 1].style.width = share(0);
+}
+
 function updateHud() {
   updatePerks();
   updateBonuses();
-  // Perk buttons and bonus chips can make the HUD wrap taller on phones.
-  if (hud.offsetHeight !== hudHeight) {
-    hudHeight = hud.offsetHeight;
-    layout();
-  }
-  const total = game.regions.length;
-  const segs = $('#power').children;
-  for (let id = 1; id < game.playerCount; id++) {
-    segs[id - 1].style.width = `${(game.territory(id) / total) * 100}%`;
-  }
-  segs[segs.length - 1].style.width = `${(game.territory(0) / total) * 100}%`;
+  updatePower();
   const s = Math.floor(game.time);
-  $('#clock').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  setText(clock, `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
 }
 
 function showEnd() {
   endShown = true;
   input.enabled = false;
+  input.reset();
   const won = game.winner === HUMAN;
   const st = game.stats[HUMAN];
   $('#end-title').textContent = won ? 'Victory!' : 'Defeat';
@@ -365,17 +393,18 @@ window.addEventListener('keydown', (e) => {
   const active = game && game.humanId === HUMAN && (overlay.hidden || !cards.pause.hidden);
   if (!active || e.ctrlKey || e.metaKey || e.altKey) return; // leave browser shortcuts alone
   const k = e.key.toLowerCase();
+  if (k === ' ' || k === 'p') e.preventDefault();
+  // A held key repeats. That mustn't flip pause or laser aiming on and off.
+  if (e.repeat) return;
+  const perk = Object.keys(PERKS).find((p) => PERKS[p].key.toLowerCase() === k);
   if (k === ' ' || k === 'p') {
-    e.preventDefault();
     if (game.status === 'playing') setPaused(!paused);
   } else if (k === 'escape') {
     if (input.targeting) input.stopTargeting();
     else if (input.selection.size) input.selection.clear();
     else setPaused(!paused);
-  } else if (!paused && k === 'l') {
-    usePerk('laser');
-  } else if (!paused && k === 'r') {
-    usePerk('regen');
+  } else if (!paused && perk) {
+    usePerk(perk);
   } else if (!paused && ['1', '2', '3', '4'].includes(k)) {
     setRatio(Number(k) * 0.25);
   } else if (!paused && k === 'a') {
@@ -391,10 +420,12 @@ document.addEventListener('visibilitychange', () => {
 function layout() {
   const h = hud.hidden ? 0 : hud.getBoundingClientRect().bottom;
   renderer.insets.top = Math.max(16, h + 4);
-  $('#toast').style.top = `${Math.max(16, h + 10)}px`; // just below the HUD, which wraps on phones
+  toasts.style.top = `${Math.max(16, h + 10)}px`; // just below the HUD
   renderer.resize();
 }
 window.addEventListener('resize', layout);
+// On phones the HUD wraps taller when perk buttons or bonus chips appear.
+new ResizeObserver(() => layout()).observe(hud);
 
 let last = performance.now();
 let acc = 0;

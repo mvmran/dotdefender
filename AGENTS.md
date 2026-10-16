@@ -91,17 +91,22 @@ Key boundaries:
   set per difficulty in `DIFFICULTY`. Easier levels get more. Capture events
   carry `special`, which `main.js` uses for its toast messages.
 - **Super perks** (`PERKS` in `game.js`): holding *every* special base of a type
-  unlocks a perk (`hasPerk`): `laser` (engineering) and `regen` (biology). State
-  per owner lives in `game.perkState` (`laserReadyAt`, `regenReadyAt`,
-  `regenUntil`, all in `game.time`). Read it through `perkStatus(owner, perk)`.
-  A newly unlocked perk charges once before first use, so an early grab can't win
-  instantly (Hard maps have one base of each type). `fireLaser(owner, regionId)`
-  makes any region neutral with 0 troops, kills dots inside it, and starts the
-  recharge. `activateRegen(owner)` makes captures fill to `cap` for
-  `regenDuration`. Timings come from the `perkTimes` Game option, set per
-  difficulty in `DIFFICULTY` (use `perkTimesFor(level)`). `applyBonuses()` emits
-  `perk` events on gain or loss. There are also `laser` and `regen` events, and
-  capture events carry `regen`. The AI uses perks in `AIController.usePerks`.
+  unlocks a perk: `laser` (engineering) and `regen` (biology). Each `PERKS` entry
+  holds everything per perk (the special type, names, HUD label, hotkey, default
+  `recharge` and `duration`), so code loops over `PERKS` instead of special-casing
+  perk ids. State lives in `game.perkState[owner][perk]` (`held`, `readyAt`,
+  `activeUntil`, times in `game.time`). `applyBonuses()` is the only thing that
+  updates `held`. Read state through `hasPerk`, `perkStatus(owner, perk)` and
+  `perkActive(owner, perk)`. A newly unlocked perk charges once before first use,
+  so an early grab can't win instantly (Hard maps have one base of each type).
+  Losing the set ends a running effect at once. `fireLaser(owner, regionId)` makes any region neutral with 0
+  troops and kills dots inside it. `activateRegen(owner)` makes captures fill to
+  `cap` while it lasts. Both start the recharge via `startPerk()`. Timings come
+  from the `perkTimes` Game option (`{ laser: { recharge }, regen: { recharge,
+  duration } }`), set per difficulty in `DIFFICULTY[level].perks` (use
+  `perkTimesFor(level)`). `applyBonuses()` emits `perk` events on gain or loss.
+  There are also `laser` and `regen` events, and capture events carry `regen`.
+  The AI uses perks in `AIController.useLaser` / `laserTarget` and `useRegen`.
 - Coordinates are world units. The average cell area is constant (`CELL_AREA` in
   `map.js`), so speeds and sizes feel the same on every map size. The renderer
   fits `map.bounds` to the screen and rotates 90° on portrait screens, so always

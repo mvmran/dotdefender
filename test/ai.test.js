@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateMap } from '../src/map.js';
-import { Game } from '../src/game.js';
+import { Game, NEUTRAL } from '../src/game.js';
 import { AIController, DIFFICULTY } from '../src/ai.js';
 
 function play(diffs, seed, maxTime = 900, rules) {
@@ -153,7 +153,7 @@ test('normal AI usually beats easy AI', () => {
 // Hands every base of `type` to player 1 at the start of a 2-player game.
 function giveSet(type, seed = 3) {
   const map = generateMap({ regionCount: 26, seed });
-  const game = new Game({ map, players: 2, humanId: null, seed, specialDensity: 0.3, perkTimes: { laserRecharge: 10, regenRecharge: 10 } });
+  const game = new Game({ map, players: 2, humanId: null, seed, specialDensity: 0.3, perkTimes: { laser: { recharge: 10 }, regen: { recharge: 10 } } });
   for (const r of game.regions) if (r.special === type) Object.assign(r, { owner: 1, troops: 20 });
   // A well-stocked enemy base, so there's something worth shooting.
   for (const r of game.regions) if (r.owner === 2) r.troops = 60;
@@ -193,4 +193,61 @@ test('AI uses super regeneration while it is attacking', () => {
   const incoming = game.incomingTable();
   const attacking = game.regions.filter((r) => r.owner !== 1).reduce((n, r) => n + incoming[r.id][1], 0);
   assert.ok(attacking > 0, 'activated with no attack under way');
+});
+
+// A 2-player map with every region neutral, for setting up a position by hand.
+function blankBoard(seed = 5) {
+  const game = new Game({ map: generateMap({ regionCount: 16, seed }), players: 2, humanId: 1, seed, specialDensity: 0 });
+  for (const r of game.regions) Object.assign(r, { owner: NEUTRAL, troops: 5, capital: false, special: null });
+  return game;
+}
+const near = (a, b) => Math.abs(a - b) < 1e-9;
+
+test('AI values completing a set only for bases that unlock a perk', () => {
+  const game = blankBoard();
+  Object.assign(game.regions[0], { owner: 2, troops: 20 });
+  Object.assign(game.regions[1], { owner: 1, troops: 20 });
+  game.applyBonuses();
+  const ai = new AIController(game, 2, 'normal', 5);
+  const t = game.regions.find((r) => r.owner === NEUTRAL);
+  const plain = ai.targetValue(t);
+  const bias = DIFFICULTY.normal.specialBias;
+  // Each is the only base of its type on the map, so taking it completes the set.
+  t.special = 'construction';
+  assert.ok(near(ai.targetValue(t), plain * bias), 'construction yards unlock no perk');
+  t.special = 'biology';
+  assert.ok(near(ai.targetValue(t), plain * bias * 1.5));
+  t.special = 'engineering';
+  assert.ok(near(ai.targetValue(t), plain * bias * 1.5));
+  // With another engineering base in enemy hands it no longer completes a set.
+  game.regions[1].special = 'engineering';
+  assert.ok(near(ai.targetValue(t), plain * bias));
+});
+
+test('AI lasers the best enemy base that is worth a shot', () => {
+  const game = blankBoard();
+  const [home, capital, base] = game.regions;
+  Object.assign(home, { owner: 2, troops: 20, special: 'engineering' });
+  Object.assign(capital, { owner: 1, troops: 11, capital: true }); // scores higher, but nearly empty
+  Object.assign(base, { owner: 1, troops: 20 });
+  game.applyBonuses();
+  const ai = new AIController(game, 2, 'normal', 5);
+  assert.equal(ai.laserTarget(), base);
+  base.troops = 5;
+  assert.equal(ai.laserTarget(), null, 'nothing worth a shot');
+  capital.special = 'biology';
+  assert.equal(ai.laserTarget(), capital, 'a special base is always worth it');
+});
+
+test('AI counts the attack it is launching when it decides on super regeneration', () => {
+  const game = blankBoard();
+  Object.assign(game.regions[0], { owner: 2, troops: 40, capital: true, special: 'biology' });
+  Object.assign(game.regions[1], { owner: 1, troops: 5, capital: true });
+  game.applyBonuses();
+  game.perkState[2].regen.readyAt = 0; // skip the first charge
+  assert.ok(game.perkStatus(2, 'regen').ready);
+  assert.equal(game.dots.length + game.orders.size, 0, 'nothing under way yet');
+  new AIController(game, 2, 'normal', 5).think();
+  assert.ok(game.orders.size > 0, 'it attacked');
+  assert.ok(game.perkStatus(2, 'regen').active > 0, 'and started super regeneration with it');
 });

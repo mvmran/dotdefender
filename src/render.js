@@ -2,8 +2,7 @@ import { PALETTE, mix } from './palette.js';
 import { ICONS, ICON_COLORS } from './icons.js';
 
 const CAPTURE_FADE = 0.45;
-const REGEN = '#22c55e';
-const LASER = '#e11d48';
+const { laser: LASER, regen: REGEN } = ICON_COLORS;
 const TAU = Math.PI * 2;
 
 export class Renderer {
@@ -43,8 +42,12 @@ export class Renderer {
     this.dpr = dpr;
     this.cssW = w;
     this.cssH = h;
-    this.canvas.width = Math.round(w * dpr);
-    this.canvas.height = Math.round(h * dpr);
+    // Assigning the canvas size clears it, even to the same value, and this
+    // also runs mid-frame when only the insets change (the HUD wrapped).
+    const pw = Math.round(w * dpr);
+    const ph = Math.round(h * dpr);
+    if (this.canvas.width !== pw) this.canvas.width = pw;
+    if (this.canvas.height !== ph) this.canvas.height = ph;
     this.canvas.style.width = `${w}px`;
     this.canvas.style.height = `${h}px`;
     if (!this.game) return;
@@ -179,9 +182,11 @@ export class Renderer {
     // Laser aiming: the hovered region glows red, with a dashed preview beam.
     if (ui.targeting && ui.hoverId != null && g.humanId != null) {
       const tgt = g.regions[ui.hoverId];
-      ctx.fillStyle = 'rgba(225,29,72,0.28)';
-      ctx.fill(this.paths[tgt.id]);
       ctx.save();
+      ctx.globalAlpha = 0.28;
+      ctx.fillStyle = LASER;
+      ctx.fill(this.paths[tgt.id]);
+      ctx.globalAlpha = 1;
       ctx.setLineDash([8 * px, 6 * px]);
       ctx.lineDashOffset = -now * 40 * px;
       ctx.strokeStyle = LASER;
@@ -252,7 +257,7 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const regenOwners = new Set();
-    for (let o = 1; o < g.playerCount; o++) if (g.regenActive(o)) regenOwners.add(o);
+    for (let o = 1; o < g.playerCount; o++) if (g.perkActive(o, 'regen')) regenOwners.add(o);
     for (const r of g.regions) {
       const pal = PALETTE[r.owner];
       if (regenOwners.has(r.owner)) {
@@ -260,9 +265,11 @@ export class Renderer {
         const pulse = 0.5 + 0.5 * Math.sin(now * 8);
         ctx.beginPath();
         ctx.arc(r.cx, r.cy, r.radius + (8 + 3 * pulse) * px, 0, TAU);
-        ctx.strokeStyle = `rgba(34,197,94,${0.45 + 0.4 * pulse})`;
+        ctx.globalAlpha = 0.45 + 0.4 * pulse;
+        ctx.strokeStyle = REGEN;
         ctx.lineWidth = 3 * px;
         ctx.stroke();
+        ctx.globalAlpha = 1;
       }
       ctx.beginPath();
       ctx.arc(r.cx, r.cy, r.radius, 0, TAU);

@@ -82,12 +82,15 @@ any base of that type slips out of your hands. The computer uses perks too.
 | Perk | Unlocked by | Key | Effect |
 | --- | --- | --- | --- |
 | Laser | every engineering works | **L** | Pick any base (even your own). Its troops, and any dots inside the region, are destroyed and it turns neutral. |
-| Super regeneration | every biology lab | **R** | For 10 seconds, every base you capture starts at full capacity. |
+| Super regeneration | every biology lab | **R** | For a few seconds (see below), every base you capture starts at full capacity. |
 
 | | Easy | Normal | Hard |
 | --- | --- | --- | --- |
 | Laser recharge | 30 s | 45 s | 60 s |
+| Super regeneration lasts | 10 s | 10 s | 10 s |
 | Super regeneration recharge | 40 s | 60 s | 80 s |
+
+Lose a base of the set while super regeneration is running and it stops at once.
 
 The perk buttons appear in the top bar once unlocked and show the time left to
 charge. Press **Esc**, or click outside the map, to cancel aiming the laser.

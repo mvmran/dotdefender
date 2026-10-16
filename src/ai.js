@@ -1,5 +1,5 @@
 import { createRng } from './rng.js';
-import { NEUTRAL, SPECIALS } from './game.js';
+import { NEUTRAL, PERKS } from './game.js';
 
 export const DIFFICULTY = {
   easy: {
@@ -17,9 +17,7 @@ export const DIFFICULTY = {
     specialBias: 1.2, // how much more it values a special base
     specialDensity: 0.3, // share of the map that is special bases (more on easier levels)
     // Super perk timings (seconds); used by every player in the game.
-    laserRecharge: 30,
-    regenDuration: 10,
-    regenRecharge: 40,
+    perks: { laser: { recharge: 30 }, regen: { duration: 10, recharge: 40 } },
   },
   normal: {
     interval: 1.6,
@@ -35,9 +33,7 @@ export const DIFFICULTY = {
     humanBias: 1,
     specialBias: 1.5,
     specialDensity: 0.18,
-    laserRecharge: 45,
-    regenDuration: 10,
-    regenRecharge: 60,
+    perks: { laser: { recharge: 45 }, regen: { duration: 10, recharge: 60 } },
   },
   hard: {
     interval: 0.9,
@@ -53,18 +49,19 @@ export const DIFFICULTY = {
     humanBias: 1.15,
     specialBias: 1.8,
     specialDensity: 0.1,
-    laserRecharge: 60,
-    regenDuration: 10,
-    regenRecharge: 80,
+    perks: { laser: { recharge: 60 }, regen: { duration: 10, recharge: 80 } },
   },
 };
 
 const dist = (a, b) => Math.hypot(a.cx - b.cx, a.cy - b.cy);
 
+// Special base types that unlock a super perk once you hold every one.
+const PERK_SPECIALS = new Set(Object.values(PERKS).map((p) => p.special));
+
 // Super perk timings for a difficulty, in the shape Game's perkTimes expects.
 export function perkTimesFor(difficulty) {
   const p = DIFFICULTY[difficulty] ?? DIFFICULTY.normal;
-  return { laserRecharge: p.laserRecharge, regenDuration: p.regenDuration, regenRecharge: p.regenRecharge };
+  return Object.fromEntries(Object.entries(p.perks).map(([perk, times]) => [perk, { ...times }]));
 }
 
 export class AIController {
@@ -89,14 +86,15 @@ export class AIController {
     const me = this.owner;
     const mine = g.regions.filter((r) => r.owner === me);
     if (!mine.length) return;
-    this.usePerks(mine);
+    this.useLaser();
+    // Built after the laser, which can destroy dots and orders.
+    const incoming = g.incomingTable();
     // Only roll when the level has random moves, so other levels play as before.
     if (this.p.randomMove > 0 && this.rng.next() < this.p.randomMove) {
-      this.randomMove(mine);
+      this.useRegen(incoming, this.randomMove(mine));
       return;
     }
 
-    const incoming = g.incomingTable();
     // net: troops a region will have once everything in flight lands.
     const net = new Map();
     const avail = new Map();
@@ -126,60 +124,72 @@ export class AIController {
       }
     }
 
+    let launched = 0; // troops this decision sends at regions we don't own
     while (actions > 0) {
       const plan = this.bestAttack(mine, incoming, avail);
       if (!plan) break;
-      this.execute(plan, plan.target, avail);
+      launched += this.execute(plan, plan.target, avail);
       actions--;
     }
 
     if (actions > 0) this.consolidate(mine, avail);
+    this.useRegen(incoming, launched);
   }
 
-  // Fires the laser and starts super regeneration when they're worth it.
-  usePerks(mine) {
+  useLaser() {
+    if (!this.game.perkStatus(this.owner, 'laser').ready) return;
+    const target = this.laserTarget();
+    if (target) this.game.fireLaser(this.owner, target.id);
+  }
+
+  // The enemy base the AI would most like to wipe out, or null when none is
+  // worth a shot.
+  laserTarget() {
     const g = this.game;
     const me = this.owner;
-    if (g.perkStatus(me, 'laser').ready) {
-      const enemies = g.regions.filter((r) => r.owner !== me && r.owner !== NEUTRAL);
-      let target = null;
-      if (enemies.length && this.p.randomMove > 0 && this.rng.next() < this.p.randomMove) {
-        target = this.rng.pick(enemies);
-      } else {
-        let best = -1;
-        for (const r of enemies) {
-          let score = r.troops + (r.special ? 25 : 0) + (r.capital ? 10 : 0);
-          if (r.owner === g.humanId) score *= this.p.humanBias;
-          if (score > best) {
-            best = score;
-            target = r;
-          }
-        }
-        // Don't waste a shot on a nearly empty base.
-        if (target && target.troops < 12 && !target.special) target = null;
+    const enemies = g.regions.filter((r) => r.owner !== me && r.owner !== NEUTRAL);
+    if (!enemies.length) return null;
+    if (this.p.randomMove > 0 && this.rng.next() < this.p.randomMove) return this.rng.pick(enemies);
+    let target = null;
+    let best = -1;
+    for (const r of enemies) {
+      // Don't waste a shot on a nearly empty base.
+      if (r.troops < 12 && !r.special) continue;
+      let score = r.troops + (r.special ? 25 : 0) + (r.capital ? 10 : 0);
+      if (r.owner === g.humanId) score *= this.p.humanBias;
+      if (score > best) {
+        best = score;
+        target = r;
       }
-      if (target) g.fireLaser(me, target.id);
     }
-    if (g.perkStatus(me, 'regen').ready) {
-      // Worth it only while troops are heading into regions we don't own.
-      const incoming = g.incomingTable();
-      let attacking = 0;
-      for (const r of g.regions) if (r.owner !== me) attacking += incoming[r.id][me];
-      if (attacking >= 6) g.activateRegen(me);
-    }
-    return mine;
+    return target;
+  }
+
+  // Super regeneration is worth it only while troops are heading into regions
+  // we don't own: those already under way (`incoming`, from before this
+  // decision) plus `launched`, the troops this decision just sent.
+  useRegen(incoming, launched) {
+    const g = this.game;
+    const me = this.owner;
+    if (!g.perkStatus(me, 'regen').ready) return;
+    let attacking = launched;
+    for (const r of g.regions) if (r.owner !== me) attacking += incoming[r.id][me];
+    if (attacking >= 6) g.activateRegen(me);
   }
 
   // An unplanned move: a random base sends a random share of its troops to a
-  // random region, ignoring threats, odds and distance.
+  // random region, ignoring threats, odds and distance. Returns the troops
+  // sent if the target isn't ours, otherwise 0.
   randomMove(mine) {
     const g = this.game;
     const sources = mine.filter((r) => r.troops >= 2 && !g.orders.has(r.id));
-    if (!sources.length) return false;
+    if (!sources.length) return 0;
     const src = this.rng.pick(sources);
     const targets = g.regions.filter((r) => r.id !== src.id);
     const target = this.rng.pick(targets);
-    return g.sendCount(this.owner, src.id, target.id, Math.max(1, Math.floor(src.troops * this.rng.range(0.3, 1))));
+    const count = Math.max(1, Math.floor(src.troops * this.rng.range(0.3, 1)));
+    if (!g.sendCount(this.owner, src.id, target.id, count) || target.owner === this.owner) return 0;
+    return count;
   }
 
   // Picks nearby sources until `need` troops are covered. Returns null when
@@ -224,26 +234,39 @@ export class AIController {
       const plan = this.gather(t, need, mine, avail);
       if (!plan) continue;
 
-      let value = t.size * (t.owner === NEUTRAL ? 1 : 1.35);
-      if (t.owner === g.humanId) value *= this.p.humanBias;
-      if (t.special) {
-        value *= this.p.specialBias;
-        // Extra pull when this base would complete a set and unlock a super perk.
-        const others = g.regions.filter((r) => r.special === t.special && r.id !== t.id);
-        if (SPECIALS[t.special] && others.every((r) => r.owner === me)) value *= 1.5;
-      }
-      if (t.neighbors.some((n) => g.regions[n].owner === me)) value *= 1.4;
       const noise = 1 + (this.rng.next() * 2 - 1) * this.p.noise;
-      const score = (value / (need + plan.maxDist * 0.06 + 5)) * noise;
+      const score = (this.targetValue(t) / (need + plan.maxDist * 0.06 + 5)) * noise;
       if (!best || score > best.score) best = { ...plan, target: t, score };
     }
     return best;
   }
 
-  execute(plan, target, avail) {
-    for (const part of plan.parts) {
-      if (this.game.sendCount(this.owner, part.id, target.id, part.count)) avail.set(part.id, 0);
+  // How much the AI wants region `t`, before cost, distance and noise.
+  targetValue(t) {
+    const g = this.game;
+    const me = this.owner;
+    let value = t.size * (t.owner === NEUTRAL ? 1 : 1.35);
+    if (t.owner === g.humanId) value *= this.p.humanBias;
+    if (t.special) {
+      value *= this.p.specialBias;
+      // Extra pull when this base would complete a set and unlock a super perk.
+      const others = g.regions.filter((r) => r.special === t.special && r.id !== t.id);
+      if (PERK_SPECIALS.has(t.special) && others.every((r) => r.owner === me)) value *= 1.5;
     }
+    if (t.neighbors.some((n) => g.regions[n].owner === me)) value *= 1.4;
+    return value;
+  }
+
+  // Sends each part of a plan. Returns the troops actually sent.
+  execute(plan, target, avail) {
+    let sent = 0;
+    for (const part of plan.parts) {
+      if (this.game.sendCount(this.owner, part.id, target.id, part.count)) {
+        avail.set(part.id, 0);
+        sent += part.count;
+      }
+    }
+    return sent;
   }
 
   // Moves idle troops from full interior regions toward the front line.
