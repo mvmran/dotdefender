@@ -38,6 +38,9 @@ src/input.js     pointer (mouse/touch) gestures -> send commands
 src/palette.js   colours per owner id
 src/icons.js     special-base icons as SVG path strings (canvas Path2D + inline SVG)
 src/rng.js       seeded PRNG (mulberry32)
+test/            node:test suites (game, ai, map, geometry)
+tools/serve.js   zero-dependency static dev server (`npm start`)
+.github/workflows/pages.yml   test, then deploy to GitHub Pages
 ```
 
 Key boundaries:
@@ -111,24 +114,86 @@ Key boundaries:
   `applyBonuses()` emits `perk` events on gain or loss. There are also `laser`
   and `regen` events, and capture events carry `regen`. The AI uses perks in
   `AIController.useLaser` / `laserTarget` and `useRegen`.
+- **Computer opponent** (`AIController` in `ai.js`). Every `interval` seconds
+  `think()` runs:
+  1. `useLaser()` fires a ready laser via `laserTarget()`. Bases under 12
+     troops aren't worth it unless they're special.
+  2. Builds `incoming` once.
+  3. On Easy it may make a `randomMove()` instead of planning.
+  4. Otherwise it defends endangered bases, attacks via `bestAttack()`, then
+     `consolidate()`s idle troops toward the front.
+  5. Last, `useRegen(incoming, launched)` counts the troops this decision just
+     sent.
+
+  Targets are scored by `targetValue()`. Specials score higher, and more again
+  if taking one would complete a perk set. A 0-troop neutral (for example one
+  the laser left behind) is always worth attacking: don't skip a target as
+  "enough on the way" unless something actually is on the way. The levels
+  differ through `DIFFICULTY`:
+  - Speed: `interval` and `startDelay`.
+  - Mistakes: `randomMove`, `noise` and `defendChance`.
+  - Commitment: `margin`, `flat`, `maxSources`, `actions` and `reserve`.
+  - Preferences: `humanBias` and `specialBias`.
+  - Distance: `reach`, the farthest troops travel to an ordinary target (a
+    neighbouring region is always in reach). `longShot` is the chance of a
+    strategic strike at distant enemy bases, plus the regions around them with
+    `longShotRing`. A strike only goes ahead when it's worth at least half the
+    best nearby attack.
+
+  Easy reaches 2.5 cells with no strikes, Normal reaches 4 cells and sometimes
+  strikes enemy bases, and Hard has unlimited reach and strikes most.
 - Coordinates are world units. The average cell area is constant (`CELL_AREA` in
   `map.js`), so speeds and sizes feel the same on every map size. The renderer
   fits `map.bounds` to the screen and rotates 90° on portrait screens, so always
   convert with `renderer.screenToWorld` / `worldToScreen`, never by hand.
 
+## Browser UI (`main.js`, `render.js`, `index.html`, `style.css`)
+
+- **No needless DOM writes per frame.** `updateHud()` runs every frame. It writes
+  text through `setText()`, only when the text changed, and rebuilds the power
+  bar and bonus chips only when their key changes. Keep it that way: blind
+  per-frame writes restyle the HUD 60 times a second.
+- **Layout.** A `ResizeObserver` on `#hud` calls `layout()`, which places the map
+  (`renderer.insets.top`) and the `#toasts` stack below the HUD. Assigning
+  `canvas.width/height` clears the canvas, even to the same value, so
+  `renderer.resize()` only does it when the size really changes.
+- **Help text reads the game.** `index.html` doesn't hard-code numbers.
+  `[data-bonus]`, `[data-perk-recharge]` and `[data-perk-duration]` are filled
+  from `SPECIALS` and `perkTimesFor(difficulty)` (`syncHelp()` re-runs when the
+  menu changes). In flex rows such as `.legend`, wrap the text in one span, or
+  the flex gap splits sentences into columns.
+- **Messages** go through `toast(html)`. Toasts stack (up to 3) instead of
+  replacing each other, because one frame can raise several.
+- **Colours** for perks come from `ICON_COLORS` (`icons.js`). The renderer
+  imports them, and CSS gets them through `--perk-color` on each perk button.
+  Don't copy hex values.
+- **Keys** only apply while a human game is playing or paused, and ignore
+  auto-repeat. That way holding Space or L doesn't flicker pause or aiming.
+  Laser aiming (`input.targeting`) is cancelled when the laser stops being
+  usable, the game ends, or the player goes to the menu.
+
 ## Balancing
 
-Tunables live in `CONFIG` (`game.js`) and `DIFFICULTY` (`ai.js`). Player-facing
-rule ranges live in `RULES` (`game.js`). After changing
-them, run `npm test`. `test/ai.test.js` asserts that hard reliably beats easy,
-normal usually beats easy, AIs expand early, and that easy keeps its handicaps
-(`startDelay`, `interval` and `randomMove`, the share of decisions that are
-random moves; only easy has it above 0), that easy troops never travel more
-than 3 cells, and that long strikes at enemy bases go easy (none) < normal <
-hard. Reach and long strikes are `reach`, `longShot` and `longShotRing` in
-`DIFFICULTY`, measured in cells (`CELL_SIZE` in `map.js`, about one region
-across). For a broader check, simulate many seeded AI-vs-AI games
-headlessly with `new Game({ map, players, humanId: null, seed })` and step them in a loop.
+- Tunables live in `CONFIG` (`game.js`) and `DIFFICULTY` (`ai.js`).
+  Player-facing rule ranges live in `RULES` (`game.js`). Distances in
+  `DIFFICULTY` (`reach`) are in cells: `CELL_SIZE` in `map.js`, about one
+  region across. A medium map is about 10 cells corner to corner.
+- `test/ai.test.js` asserts:
+  - Hard reliably beats Easy, and Normal usually does.
+  - AIs expand early.
+  - Easy keeps its handicaps: `startDelay`, `interval` and `randomMove` (only
+    Easy has random moves).
+  - Easy troops never travel more than 3 cells.
+  - Long strikes at enemy bases go Easy (none) < Normal < Hard.
+- Unit tests don't show how much stronger or weaker a change made a level. To
+  measure that, export the old code (`git archive <commit> src | tar -x -C
+  <dir>`) and play the old AI against the new one at the same level. Run
+  headless 1v1 games on the same seeds, with both seats swapped:
+  `new Game({ map, players: 2, humanId: null, seed, specialDensity, perkTimes })`,
+  stepped at 1/60 s. A mirror match comes out near 50%. The last tuning
+  targeted about 75–80% for the old AI when making a level easier. Also check
+  the cross-level ordering (Hard > Normal > Easy) and that no game stalls
+  until the time cap.
 
 ## Testing changes
 
