@@ -46,14 +46,17 @@ button {
   font-weight: 700;
 }
 
+/* The bar wraps rather than overflowing: with cheats, bonus chips and both perk
+   buttons showing it is wider than many laptop and tablet screens. */
 #hud {
   position: fixed;
   top: 12px;
   left: 12px;
   right: 12px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
+  gap: 8px 14px;
   padding: 8px 10px 8px 16px;
   border-radius: 14px;
   background: var(--hud);
@@ -83,8 +86,11 @@ button {
 
 .hud-controls {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 10px;
+  margin-left: auto; /* stays on the right when it wraps onto its own row */
 }
 
 .ratio {
@@ -504,7 +510,8 @@ h2 {
   color: var(--muted);
 }
 
-@media (max-width: 640px) {
+/* Phones, upright or on their side (short landscape screens). */
+@media (max-width: 640px), (max-height: 500px) {
   /* Icon and countdown only, so the bar fits on a phone. */
   .perk-btn {
     padding: 0 7px 0 5px;
@@ -517,8 +524,6 @@ h2 {
   }
   .hud-controls {
     gap: 6px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
   }
   .clock {
     min-width: 0;
@@ -529,7 +534,6 @@ h2 {
     right: 8px;
     gap: 8px;
     padding: 6px 6px 6px 10px;
-    flex-wrap: wrap;
   }
   .hud-brand {
     display: none;
