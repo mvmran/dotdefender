@@ -211,8 +211,10 @@ export class Game {
           // win the game within seconds.
           st.readyAt = Math.max(st.readyAt, this.time + this.perkTimes[perk].recharge);
         } else {
-          // Losing a base of the set ends an effect that is still running.
+          // Losing a base of the set ends an effect that is still running,
+          // and its recharge counts from now rather than the planned end.
           st.activeUntil = Math.min(st.activeUntil, this.time);
+          st.readyAt = Math.min(st.readyAt, this.time + this.perkTimes[perk].recharge);
         }
         this.events.push({ type: 'perk', owner: o, perk, gained: held, time: this.time });
       }

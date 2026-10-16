@@ -136,9 +136,9 @@ document.querySelectorAll('[data-bonus]').forEach((el) => {
 function syncHelp() {
   const times = perkTimesFor(settings.difficulty);
   const level = $(`[data-setting="difficulty"] [data-value="${settings.difficulty}"]`)?.textContent ?? 'Normal';
-  const recharge = Object.entries(PERKS).map(([perk, spec]) => `${spec.name.toLowerCase()} ${times[perk].recharge} s`);
+  const recharge = Object.entries(PERKS).map(([perk, spec]) => `${spec.name.toLowerCase()} ${times[perk].recharge}\u00a0s`);
   $('[data-perk-recharge]').textContent = `on ${level}: ${recharge.join(', ')}`;
-  document.querySelectorAll('[data-perk-duration]').forEach((el) => (el.textContent = `${times[el.dataset.perkDuration].duration} seconds`));
+  document.querySelectorAll('[data-perk-duration]').forEach((el) => (el.textContent = `${times[el.dataset.perkDuration].duration}\u00a0seconds`));
 }
 syncHelp();
 $('#cheats-btn').addEventListener('click', () => show('cheats'));
@@ -344,7 +344,8 @@ function announcePerks() {
   }
 }
 
-// Territory shares only change on a capture, so only then resize the bar.
+// Territory only changes when a region changes hands (a capture or a laser
+// shot), so the bar is only rewritten when the counts change.
 let lastPowerKey = '';
 function updatePower() {
   const counts = Array.from({ length: game.playerCount }, (_, id) => game.territory(id));
@@ -389,8 +390,9 @@ function showEnd() {
 
 // ----- Keyboard -----
 window.addEventListener('keydown', (e) => {
-  // Keys only apply to a human game that is running or paused.
-  const active = game && game.humanId === HUMAN && (overlay.hidden || !cards.pause.hidden);
+  // Keys only apply to a human game that is running or paused (not one that
+  // just ended, while the end card is on its way).
+  const active = game && game.humanId === HUMAN && game.status === 'playing' && (overlay.hidden || !cards.pause.hidden);
   if (!active || e.ctrlKey || e.metaKey || e.altKey) return; // leave browser shortcuts alone
   const k = e.key.toLowerCase();
   if (k === ' ' || k === 'p') e.preventDefault();
@@ -398,7 +400,7 @@ window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   const perk = Object.keys(PERKS).find((p) => PERKS[p].key.toLowerCase() === k);
   if (k === ' ' || k === 'p') {
-    if (game.status === 'playing') setPaused(!paused);
+    setPaused(!paused);
   } else if (k === 'escape') {
     if (input.targeting) input.stopTargeting();
     else if (input.selection.size) input.selection.clear();

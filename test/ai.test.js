@@ -164,7 +164,9 @@ function giveSet(type, seed = 3) {
 test('AI fires its laser at an enemy once it is charged', () => {
   for (const level of ['easy', 'normal', 'hard']) {
     const game = giveSet('engineering');
-    const ais = [new AIController(game, 1, level, 3), new AIController(game, 2, 'normal', 3)];
+    // The enemy stays passive: an active one can spread itself thin and lose
+    // every worthwhile base before the laser has charged.
+    const ais = [new AIController(game, 1, level, 3)];
     let shot = null;
     while (!shot && game.time < 40 && game.status === 'playing') {
       game.step(1 / 60);
@@ -237,6 +239,21 @@ test('AI lasers the best enemy base that is worth a shot', () => {
   assert.equal(ai.laserTarget(), null, 'nothing worth a shot');
   capital.special = 'biology';
   assert.equal(ai.laserTarget(), capital, 'a special base is always worth it');
+});
+
+test('AI retakes a neutral base left with 0 troops, such as one the laser hit', () => {
+  for (const level of ['normal', 'hard']) {
+    const game = blankBoard();
+    const home = game.regions[0];
+    Object.assign(home, { owner: 2, troops: 40, capital: true });
+    Object.assign(game.regions[home.neighbors[1]], { owner: 1, troops: 30, capital: true });
+    for (const r of game.regions) if (r.owner === NEUTRAL) r.troops = 100;
+    const empty = game.regions[home.neighbors[0]];
+    empty.troops = 0;
+    game.applyBonuses();
+    new AIController(game, 2, level, 5).think();
+    assert.ok([...game.orders.values()].some((o) => o.target === empty.id), `${level} AI left it alone`);
+  }
 });
 
 test('AI counts the attack it is launching when it decides on super regeneration', () => {

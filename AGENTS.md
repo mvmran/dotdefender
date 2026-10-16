@@ -92,21 +92,25 @@ Key boundaries:
   carry `special`, which `main.js` uses for its toast messages.
 - **Super perks** (`PERKS` in `game.js`): holding *every* special base of a type
   unlocks a perk: `laser` (engineering) and `regen` (biology). Each `PERKS` entry
-  holds everything per perk (the special type, names, HUD label, hotkey, default
-  `recharge` and `duration`), so code loops over `PERKS` instead of special-casing
-  perk ids. State lives in `game.perkState[owner][perk]` (`held`, `readyAt`,
-  `activeUntil`, times in `game.time`). `applyBonuses()` is the only thing that
-  updates `held`. Read state through `hasPerk`, `perkStatus(owner, perk)` and
-  `perkActive(owner, perk)`. A newly unlocked perk charges once before first use,
-  so an early grab can't win instantly (Hard maps have one base of each type).
-  Losing the set ends a running effect at once. `fireLaser(owner, regionId)` makes any region neutral with 0
-  troops and kills dots inside it. `activateRegen(owner)` makes captures fill to
-  `cap` while it lasts. Both start the recharge via `startPerk()`. Timings come
-  from the `perkTimes` Game option (`{ laser: { recharge }, regen: { recharge,
-  duration } }`), set per difficulty in `DIFFICULTY[level].perks` (use
-  `perkTimesFor(level)`). `applyBonuses()` emits `perk` events on gain or loss.
-  There are also `laser` and `regen` events, and capture events carry `regen`.
-  The AI uses perks in `AIController.useLaser` / `laserTarget` and `useRegen`.
+  holds the per-perk data (special type, names, HUD label, hotkey, default
+  `recharge` and `duration`), and the shared plumbing (state, unlocking, the HUD
+  loop, hotkeys, help timings) loops over it. The effects stay per perk
+  (`fireLaser`, `activateRegen`, `usePerk` in `main.js`, the AI, render effects),
+  and `index.html` needs a `#<perk>-btn` button for each perk.
+  State lives in `game.perkState[owner][perk]` (`held`, `readyAt`, `activeUntil`,
+  times in `game.time`). Only `applyBonuses()` updates `held`. Read state through
+  `hasPerk`, `perkStatus(owner, perk)` and `perkActive(owner, perk)`. A newly
+  unlocked perk charges once before first use, so an early grab can't win
+  instantly (Hard maps have one base of each type). Losing the set ends a running
+  effect at once, and its recharge counts from then.
+  `fireLaser(owner, regionId)` makes any region neutral with 0 troops and kills
+  dots inside it. `activateRegen(owner)` makes captures fill to `cap` while it
+  lasts. Both start the recharge via `startPerk()`. Timings come from the
+  `perkTimes` Game option (`{ laser: { recharge }, regen: { recharge, duration } }`),
+  set per difficulty in `DIFFICULTY[level].perks` (use `perkTimesFor(level)`).
+  `applyBonuses()` emits `perk` events on gain or loss. There are also `laser`
+  and `regen` events, and capture events carry `regen`. The AI uses perks in
+  `AIController.useLaser` / `laserTarget` and `useRegen`.
 - Coordinates are world units. The average cell area is constant (`CELL_AREA` in
   `map.js`), so speeds and sizes feel the same on every map size. The renderer
   fits `map.bounds` to the screen and rotates 90° on portrait screens, so always

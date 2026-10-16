@@ -481,6 +481,23 @@ test('losing a biology lab ends super regeneration at once', () => {
   assert.ok(game.regions[2].troops < game.regions[2].cap / 2, `troops ${game.regions[2].troops}`);
 });
 
+test('retaking the lab does not resume super regeneration, and it recharges in full', () => {
+  const game = perkSetup('biology', { regen: { duration: 10, recharge: 30 } });
+  wait(game, 30.1);
+  assert.ok(game.activateRegen(1));
+  game.regions[1].owner = 2;
+  game.applyBonuses();
+  wait(game, 1);
+  game.regions[1].owner = 1;
+  game.applyBonuses();
+  const st = game.perkStatus(1, 'regen');
+  assert.ok(!game.perkActive(1, 'regen'));
+  assert.equal(st.active, 0);
+  assert.ok(st.unlocked && !st.ready);
+  // It charges once from the regain, not from the effect's planned end.
+  assert.ok(Math.abs(st.charge - 30) < 1e-9, `charge ${st.charge}`);
+});
+
 test('super regeneration needs every biology base', () => {
   const game = perkSetup('engineering');
   assert.equal(game.activateRegen(1), false);

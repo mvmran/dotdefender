@@ -229,7 +229,9 @@ export class AIController {
         defence += Math.max(0, Math.min(t.cap - t.troops, t.growth * travel));
       }
       const need = Math.ceil(defence * (1 + this.p.margin) + this.p.flat);
-      if (need <= this.p.flat) continue; // enough is already on the way
+      // Enough is already on the way. (A 0-troop neutral, e.g. one the laser
+      // left behind, also needs only `flat`, but nothing is on its way there.)
+      if (need <= this.p.flat && incoming[t.id][me] > 0) continue;
 
       const plan = this.gather(t, need, mine, avail);
       if (!plan) continue;
