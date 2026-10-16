@@ -155,6 +155,11 @@ Key boundaries:
 
 ## Browser UI (`main.js`, `render.js`, `index.html`, `style.css`)
 
+- **Settings** persist in `localStorage` under `dotdefender.settings`: `difficulty`,
+  `opponents`, `size`, `ratio`, `assist` and `rules`. `loadSettings()` merges
+  them over defaults and validates them (`resolveRules()`, `assist === true`),
+  so old or hand-edited data can't break the page. A new setting needs a
+  default there. Menu segmented controls store string values.
 - **No needless DOM writes per frame.** `updateHud()` runs every frame. It writes
   text through `setText()`, only when the text changed, and rebuilds the power
   bar and bonus chips only when their key changes. Keep it that way: blind
