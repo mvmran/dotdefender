@@ -50,11 +50,14 @@ use **Actions → Deploy to GitHub Pages → Run workflow**.
 
 ### Difficulty
 
-- **Easy:** the computer waits 8 seconds before its first move, then thinks only
-  about every 4.5 seconds. About 40% of its moves are random: a random base sends a
+- **Easy:** the computer waits 10 seconds before its first move, then thinks only
+  about every 5 seconds. Nearly half its moves are random: a random base sends a
   random share of its troops to a random region, with no planning. It also defends
-  less and misjudges targets more. Maps have the most special bases.
-- **Normal:** a steady opponent that plans every move.
+  less, misjudges targets more and would rather fight the other computers than
+  you. Maps have the most special bases.
+- **Normal:** plans every move, but takes a few seconds to get going, thinks about
+  every 2 seconds, sometimes misjudges a target, doesn't always defend, and goes
+  after you a little less than after other computers.
 - **Hard:** quick, accurate, defends everything, can make two moves at once, and
   prioritises special bases and you.
 

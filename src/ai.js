@@ -3,34 +3,34 @@ import { NEUTRAL, PERKS } from './game.js';
 
 export const DIFFICULTY = {
   easy: {
-    interval: 4.5, // seconds between decisions
-    startDelay: 8, // seconds before the first move
-    randomMove: 0.4, // chance a decision is a random move instead of a planned one
+    interval: 5.2, // seconds between decisions
+    startDelay: 10, // seconds before the first move
+    randomMove: 0.45, // chance a decision is a random move instead of a planned one
     margin: 0.35, // extra troops sent on top of the estimated defence (fraction)
     flat: 4, // extra troops sent on top of the estimated defence (absolute)
     noise: 0.5, // randomness in target choice
     maxSources: 2, // regions combined into one attack
-    defendChance: 0.45,
+    defendChance: 0.4,
     actions: 1, // orders per decision
     reserve: 3, // troops kept at home
-    humanBias: 0.9, // >1 means it prefers attacking the human
+    humanBias: 0.75, // >1 means it prefers attacking the human
     specialBias: 1.2, // how much more it values a special base
     specialDensity: 0.3, // share of the map that is special bases (more on easier levels)
     // Super perk timings (seconds); used by every player in the game.
     perks: { laser: { recharge: 30 }, regen: { duration: 10, recharge: 40 } },
   },
   normal: {
-    interval: 1.6,
-    startDelay: 1.5,
+    interval: 2.3,
+    startDelay: 3,
     randomMove: 0,
     margin: 0.2,
     flat: 3,
-    noise: 0.2,
+    noise: 0.35,
     maxSources: 3,
-    defendChance: 0.85,
+    defendChance: 0.7,
     actions: 1,
     reserve: 2,
-    humanBias: 1,
+    humanBias: 0.9,
     specialBias: 1.5,
     specialDensity: 0.18,
     perks: { laser: { recharge: 45 }, regen: { duration: 10, recharge: 60 } },
