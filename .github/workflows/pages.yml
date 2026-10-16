@@ -28,6 +28,16 @@ jobs:
         run: |
           mkdir _site
           cp -r index.html style.css src _site/
+      # Pages lets browsers cache files for 10 minutes. Without this, a fresh
+      # index.html can run with stale CSS/JS from the previous deploy. Every
+      # reference gets the commit id, so a page always loads a matching set.
+      - name: Version asset URLs
+        run: |
+          V=${GITHUB_SHA::8}
+          sed -i "s#href=\"style.css\"#href=\"style.css?v=$V\"#; s#src=\"src/main.js\"#src=\"src/main.js?v=$V\"#" _site/index.html
+          sed -i -E "s#(from '\./[a-z]+\.js)'#\1?v=$V'#g" _site/src/*.js
+          grep -q "main.js?v=$V" _site/index.html
+          ! grep -nE "from '\./[a-z]+\.js'" _site/src/*.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

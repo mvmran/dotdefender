@@ -226,3 +226,10 @@ Key boundaries:
 
 `.github/workflows/pages.yml` runs the tests, then deploys to GitHub Pages on every
 push to `main` (or on manual dispatch). Live site: https://mvmran.github.io/dotdefender/
+
+Pages lets browsers cache every file for 10 minutes. So the deploy appends
+`?v=<commit>` to `style.css` and `src/main.js` in `index.html`, and to every
+`from './x.js'` import in `src/`. A page then always loads files from one
+deploy, never a new page with stale scripts. Keep imports in the
+`from './name.js'` form so that step catches them; the step fails if any
+import is left unstamped. Don't add `?v=` in the source files themselves.
